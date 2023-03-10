@@ -3,10 +3,11 @@ package mqlib
 import (
 	"context"
 	"errors"
-	"mqlib/log"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/wgdzlh/mqlib/log"
 
 	"github.com/apache/rocketmq-client-go/v2/consumer"
 	"github.com/apache/rocketmq-client-go/v2/primitive"

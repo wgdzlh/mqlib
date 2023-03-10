@@ -1,4 +1,4 @@
-module mqlib
+module github.com/wgdzlh/mqlib
 
 go 1.17
 
