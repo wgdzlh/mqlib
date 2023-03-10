@@ -1,13 +1,10 @@
 package log
 
 import (
-	"io"
-	"log"
 	"os"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var (
@@ -26,13 +23,12 @@ const (
 
 // 日志配置
 type logConfig struct {
-	LogPath    string
-	LogLevel   string
-	Compress   bool
-	MaxSize    int
-	MaxAge     int
-	MaxBackups int
-	Format     string
+	LogLevel string
+	Format   string
+}
+
+func init() {
+	InitLog()
 }
 
 func getZapLevel(level string) zapcore.Level {
@@ -54,18 +50,6 @@ func getZapLevel(level string) zapcore.Level {
 	}
 }
 
-func newLogWriter(logPath string, maxSize int, compress bool) io.Writer {
-	if logPath == "" || logPath == "-" {
-		log.Println("output logs to stdout")
-		return os.Stdout
-	}
-	return &lumberjack.Logger{
-		Filename: logPath,
-		MaxSize:  maxSize,
-		Compress: compress,
-	}
-}
-
 func newZapEncoder() zapcore.EncoderConfig {
 	encoderConfig := zapcore.EncoderConfig{
 		TimeKey:        "time",
@@ -83,23 +67,21 @@ func newZapEncoder() zapcore.EncoderConfig {
 	}
 	return encoderConfig
 }
-func newLoggerCore(log *logConfig) zapcore.Core {
-	hook := newLogWriter(log.LogPath, log.MaxSize, log.Compress)
 
+func newLoggerCore(cfg *logConfig) zapcore.Core {
+	aLevel = zap.NewAtomicLevelAt(getZapLevel(cfg.LogLevel))
 	encoderConfig := newZapEncoder()
 
-	aLevel = zap.NewAtomicLevelAt(getZapLevel(log.LogLevel))
-
 	var encoder zapcore.Encoder
-	if log.Format == FormatJSON {
+	if cfg.Format == FormatJSON {
 		encoder = zapcore.NewJSONEncoder(encoderConfig)
 	} else {
 		encoder = zapcore.NewConsoleEncoder(encoderConfig)
 	}
-
+	output := os.Stdout
 	core := zapcore.NewCore(
 		encoder,
-		zapcore.AddSync(hook),
+		zapcore.AddSync(output),
 		aLevel,
 	)
 	return core
@@ -120,46 +102,10 @@ func newLoggerOptions() []zap.Option {
 // Option function option
 type Option func(*logConfig)
 
-// Path set logPath
-// if is zero will print,or write file
-func Path(logPath string) Option {
-	return func(logCfg *logConfig) {
-		logCfg.LogPath = logPath
-	}
-}
-
-// Compress compress log
-func Compress(compress bool) Option {
-	return func(logCfg *logConfig) {
-		logCfg.Compress = compress
-	}
-}
-
 // Level set log level default info
 func Level(level string) Option {
 	return func(logCfg *logConfig) {
 		logCfg.LogLevel = level
-	}
-}
-
-// MaxSize Log Max Size
-func MaxSize(size int) Option {
-	return func(logCfg *logConfig) {
-		logCfg.MaxSize = size
-	}
-}
-
-// MaxAge log store day
-func MaxAge(age int) Option {
-	return func(logCfg *logConfig) {
-		logCfg.MaxAge = age
-	}
-}
-
-// MaxBackups total store log
-func MaxBackups(backup int) Option {
-	return func(logCfg *logConfig) {
-		logCfg.MaxBackups = backup
 	}
 }
 
@@ -177,18 +123,16 @@ func Format(format string) Option {
 
 func defaultOption() *logConfig {
 	return &logConfig{
-		LogPath:    "",
-		MaxSize:    20,
-		Compress:   true,
-		MaxAge:     7,
-		MaxBackups: 7,
-		LogLevel:   "debug",
-		Format:     FormatText,
+		LogLevel: "info",
+		Format:   FormatText,
 	}
 }
 
 // InitLog conf
-func InitLog(opts ...Option) error {
+func InitLog(opts ...Option) {
+	if len(opts) == 0 {
+		return
+	}
 	logCfg := defaultOption()
 	for _, opt := range opts {
 		opt(logCfg)
@@ -197,7 +141,6 @@ func InitLog(opts ...Option) error {
 
 	zapOpts := newLoggerOptions()
 	_logger = zap.New(core, zapOpts...)
-	return nil
 }
 
 func SetLevel(level string) {
