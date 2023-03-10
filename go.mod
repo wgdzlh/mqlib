@@ -6,7 +6,6 @@ require (
 	github.com/apache/rocketmq-client-go/v2 v2.1.1
 	github.com/google/uuid v1.3.0
 	go.uber.org/zap v1.24.0
-	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
 require (
@@ -26,4 +25,5 @@ require (
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/sys v0.6.0 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )

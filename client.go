@@ -5,10 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"mqlib/log"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/apache/rocketmq-client-go/v2/consumer"
 	"github.com/apache/rocketmq-client-go/v2/primitive"
+	"github.com/apache/rocketmq-client-go/v2/rlog"
 	"go.uber.org/zap"
 )
 
@@ -31,6 +34,16 @@ type Client struct {
 	subGpName  string    // MQ消费者分组名称
 	sub        *Consumer // 可接收RPC调用的MQ客户端消费者
 	pub        *Producer // MQ客户端通用的生产者
+}
+
+func init() {
+	ex, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+	exPath := filepath.Dir(ex)
+	rlog.SetLogLevel("warn")
+	rlog.SetOutputPath(filepath.Join(exPath, "rocketmq.log"))
 }
 
 // 可接收RPC调用的MQ客户端
