@@ -130,7 +130,7 @@ func defaultOption() *logConfig {
 
 // InitLog conf
 func InitLog(opts ...Option) {
-	if len(opts) == 0 {
+	if _logger != nil && len(opts) == 0 {
 		return
 	}
 	logCfg := defaultOption()

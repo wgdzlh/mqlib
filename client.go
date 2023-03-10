@@ -3,7 +3,6 @@ package mqlib
 import (
 	"context"
 	"errors"
-	"fmt"
 	"mqlib/log"
 	"os"
 	"path/filepath"
@@ -20,6 +19,7 @@ const (
 	pubGpSuffix     = "-pub-gp"
 	reqTopicSuffix  = "-req"
 	respTopicSuffix = "-resp"
+	tagKeySep       = "@"
 )
 
 var (
@@ -51,7 +51,8 @@ func NewSrvClient(nameServer, app string, subDispatcher SubDispatcher) (c *Clien
 	if c, err = NewClient(nameServer, app); err != nil {
 		return
 	}
-	c.sub, err = NewConsumer(c.subGpName, nameServer, c.getSrvSubTopic(subDispatcher))
+	apiSubTopic := c.getSrvSubTopic(subDispatcher)
+	c.sub, err = NewConsumer(c.subGpName, nameServer, apiSubTopic)
 	return
 }
 
@@ -107,39 +108,41 @@ func (c *Client) sendMsg(msg *Message) (err error) {
 	return
 }
 
-// 响应RPC请求
+// 响应RPC请求（仅NewSrvClient生成的客户端可用）
 func (c *Client) Respond(msg *Message) (err error) {
 	if err = c.checkMsg(msg); err != nil {
 		return
 	}
 	msg.topic = c.Name + respTopicSuffix
+	msg.Tag += tagKeySep + msg.Keys[0] // 将reqId与tag进行拼接，避免rocketMQ不支持sql92过滤时，在消费端无法过滤消息
+	msg.Keys = msg.Keys[1:]
 	err = c.sendMsg(msg)
 	return
 }
 
-// 发送一次性消息（RPC请求）
+// 发送RPC请求消息
 func (c *Client) Send(msg *Message) (err error) {
 	reqId := getUniqKey()
+	msg.Keys = append([]string{reqId}, msg.Keys...) // 将reqId（uuid）插入消息KEYS属性中，方便获取响应
 	msg.topic = msg.RemoteApp + reqTopicSuffix
-	msg.Keys = append(msg.Keys, reqId)
 	err = c.sendMsg(msg)
 	return
 }
 
-// 同步阻塞接收一次性消息（获取RPC响应）
+// 同步阻塞接收RPC响应
 func (c *Client) Fetch(msg *Message) (resp []byte, err error) {
 	if err = c.checkMsg(msg); err != nil {
 		return
 	}
 	var (
-		key  = msg.Keys[len(msg.Keys)-1]
+		key  = msg.Keys[0]
 		done = make(chan struct{})
 	)
 	consumer, err := NewConsumer(c.subGpName, c.nameServer, Topic{
 		Name: msg.RemoteApp + respTopicSuffix,
 		Filter: consumer.MessageSelector{
-			Type:       consumer.SQL92,
-			Expression: fmt.Sprintf(`TAGS = '%s' AND KEYS = '%s'`, msg.Tag, key),
+			Type:       consumer.TAG,
+			Expression: msg.Tag + tagKeySep + key, // 用来过滤消息的tag组合
 		},
 		Callback: func(ctx context.Context, me ...*primitive.MessageExt) (consumer.ConsumeResult, error) {
 			defer close(done)

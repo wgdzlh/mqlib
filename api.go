@@ -9,5 +9,5 @@ type Message struct {
 }
 
 type SubDispatcher interface {
-	ProcessMsg(*Message) error
+	ProcessMsg(msg *Message) error
 }
