@@ -16,7 +16,9 @@ const (
 	DEFAULT_RETRY = 3
 )
 
-type SubCallback = func(context.Context, ...*primitive.MessageExt) (consumer.ConsumeResult, error)
+type SubCallback = func(*primitive.MessageExt) (consumer.ConsumeResult, error)
+type realCallback = func(context.Context, ...*primitive.MessageExt) (consumer.ConsumeResult, error)
+type sig = chan struct{}
 
 type Topic struct {
 	Name     string
@@ -51,12 +53,14 @@ type Consumer struct {
 	GroupName string
 	Topics    []Topic
 	rkc       rocketmq.PushConsumer
+	done      sig
 }
 
-func NewConsumer(gpName, nsName string, topics ...Topic) (c *Consumer, err error) {
+func NewConsumer(gpName, nsName string, done sig, topics ...Topic) (c *Consumer, err error) {
 	c = &Consumer{
 		GroupName: gpName,
 		Topics:    topics,
+		done:      done,
 	}
 	if c.rkc, err = rocketmq.NewPushConsumer(
 		consumer.WithNsResolver(primitive.NewPassthroughResolver([]string{nsName})),
@@ -68,7 +72,7 @@ func NewConsumer(gpName, nsName string, topics ...Topic) (c *Consumer, err error
 		return
 	}
 	for _, t := range c.Topics {
-		if err = c.rkc.Subscribe(t.Name, t.Filter, t.Callback); err != nil {
+		if err = c.rkc.Subscribe(t.Name, t.Filter, getRealCallback(t.Callback, done)); err != nil {
 			log.Error("subscribe failed", zap.String("topic", t.Name), zap.String("filter", t.Filter.Expression), zap.Error(err))
 			return
 		}
@@ -77,4 +81,18 @@ func NewConsumer(gpName, nsName string, topics ...Topic) (c *Consumer, err error
 		log.Error("start rocketmq consumer failed", zap.Error(err))
 	}
 	return
+}
+
+func getRealCallback(sc SubCallback, done sig) realCallback {
+	return func(ctx context.Context, me ...*primitive.MessageExt) (consumer.ConsumeResult, error) {
+		defer func() {
+			if done != nil {
+				close(done)
+			}
+		}()
+		if len(me) > 0 && me[0] != nil {
+			return sc(me[0])
+		}
+		return consumer.ConsumeSuccess, nil
+	}
 }

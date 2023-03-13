@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/wgdzlh/mqlib/log"
 
@@ -16,25 +18,32 @@ import (
 )
 
 const (
-	subGpSuffix     = "-sub-gp"
-	pubGpSuffix     = "-pub-gp"
-	reqTopicSuffix  = "-req"
-	respTopicSuffix = "-resp"
-	tagKeySep       = "@"
+	subGpSuffix      = "-sub-gp"
+	pubGpSuffix      = "-pub-gp"
+	reqTopicSuffix   = "-req"
+	respTopicSuffix  = "-resp"
+	tagKeySep        = "@"
+	asyncConsumerMin = 128  // 默认并发异步消费者上限
+	asyncConsumerMax = 2048 // 默认并发异步消费者上限
 )
 
 var (
 	ErrSendFailed   = errors.New("failed to send msg")
 	ErrFetchFailed  = errors.New("failed to fetch msg")
 	ErrMisformedMsg = errors.New("input msg is invalid")
+	ErrMsgTimeout   = errors.New("msg timeout")
+	ErrReachedLimit = errors.New("reached concurrent limit")
 )
 
 type Client struct {
-	Name       string    // MQ客户端名称（即本服务名称）
-	nameServer string    // MQ的NameServer地址
-	subGpName  string    // MQ消费者分组名称
-	sub        *Consumer // 可接收RPC调用的MQ客户端消费者
-	pub        *Producer // MQ客户端通用的生产者
+	Name          string         // MQ客户端名称（即本服务名称）
+	nameServer    string         // MQ的NameServer地址
+	subGpName     string         // MQ消费者分组名称
+	sub           *Consumer      // 可接收RPC调用的MQ客户端消费者
+	pub           *Producer      // MQ客户端通用的生产者
+	usedConsumers chan *Consumer // 使用过的消费者队列
+	asyncLimit    int            // 使用过的消费者队列容量
+	asyncOnce     sync.Once
 }
 
 func init() {
@@ -48,21 +57,30 @@ func init() {
 }
 
 // 可接收RPC调用的MQ客户端
-func NewSrvClient(nameServer, app string, subDispatcher SubDispatcher) (c *Client, err error) {
-	if c, err = NewClient(nameServer, app); err != nil {
+func NewSrvClient(nameServer, app string, subDispatcher SubDispatcher, asyncLimit ...int) (c *Client, err error) {
+	if c, err = NewClient(nameServer, app, asyncLimit...); err != nil {
 		return
 	}
 	apiSubTopic := c.getSrvSubTopic(subDispatcher)
-	c.sub, err = NewConsumer(c.subGpName, nameServer, apiSubTopic)
+	c.sub, err = NewConsumer(c.subGpName, nameServer, nil, apiSubTopic)
 	return
 }
 
 // 只做RPC调用的MQ客户端
-func NewClient(nameServer, app string) (c *Client, err error) {
+func NewClient(nameServer, app string, asyncLimit ...int) (c *Client, err error) {
 	c = &Client{
 		Name:       app,
 		nameServer: nameServer,
 		subGpName:  app + subGpSuffix,
+	}
+	if len(asyncLimit) > 0 {
+		if asyncLimit[0] < 0 {
+			c.asyncLimit = asyncConsumerMax
+		} else if asyncLimit[0] == 0 {
+			c.asyncLimit = asyncConsumerMin
+		} else {
+			c.asyncLimit = asyncLimit[0]
+		}
 	}
 	c.pub, err = NewProducer(app+pubGpSuffix, nameServer)
 	return
@@ -72,18 +90,15 @@ func (c *Client) getSrvSubTopic(dispatcher SubDispatcher) Topic {
 	return Topic{
 		Name:   c.Name + reqTopicSuffix,
 		Filter: consumer.MessageSelector{},
-		Callback: func(ctx context.Context, me ...*primitive.MessageExt) (ret consumer.ConsumeResult, err error) {
-			var keys []string
-			for _, m := range me {
-				keys = strings.Split(strings.TrimSuffix(m.GetKeys(), primitive.PropertyKeySeparator), primitive.PropertyKeySeparator)
-				if err = dispatcher.ProcessMsg(
-					&Message{
-						Tag:  m.GetTags(),
-						Keys: keys,
-						Body: m.Body}); err != nil {
-					ret = consumer.ConsumeRetryLater
-					return
-				}
+		Callback: func(m *primitive.MessageExt) (ret consumer.ConsumeResult, err error) {
+			keys := strings.Split(strings.TrimSuffix(m.GetKeys(), primitive.PropertyKeySeparator), primitive.PropertyKeySeparator)
+			if err = dispatcher.ProcessMsg(
+				&Message{
+					Tag:  m.GetTags(),
+					Keys: keys,
+					Body: m.Body}); err != nil {
+				ret = consumer.ConsumeRetryLater
+				return
 			}
 			return consumer.ConsumeSuccess, nil
 		},
@@ -131,7 +146,45 @@ func (c *Client) Send(msg *Message) (err error) {
 }
 
 // 同步阻塞接收RPC响应
-func (c *Client) Fetch(msg *Message) (resp []byte, err error) {
+func (c *Client) Fetch(msg *Message, timeout ...time.Duration) (resp []byte, err error) {
+	if err = c.checkMsg(msg); err != nil {
+		return
+	}
+	var (
+		key  = msg.Keys[0]
+		done = make(sig) // done信号在这里生成，可以灵活控制异步的消费流程
+	)
+	csm, err := NewConsumer(c.subGpName, c.nameServer, done, Topic{
+		Name: msg.RemoteApp + respTopicSuffix,
+		Filter: consumer.MessageSelector{
+			Type:       consumer.TAG,
+			Expression: msg.Tag + tagKeySep + key, // 用来过滤消息的tag组合
+		},
+		Callback: func(m *primitive.MessageExt) (consumer.ConsumeResult, error) {
+			resp = m.Body
+			return consumer.ConsumeSuccess, nil
+		},
+	})
+	if err != nil {
+		return
+	}
+	defer csm.rkc.Shutdown() // 同步调用时，自己控制消费者的清理
+	if len(timeout) > 0 && timeout[0] > 0 {
+		select {
+		case <-done:
+		case <-time.After(timeout[0]):
+			err = ErrMsgTimeout
+		}
+	} else {
+		<-done
+	}
+	if err == nil && len(resp) == 0 {
+		err = ErrFetchFailed
+	}
+	return
+}
+
+func (c *Client) consumeAsync(msg *Message, callback SubCallback) (err error) {
 	if err = c.checkMsg(msg); err != nil {
 		return
 	}
@@ -139,28 +192,55 @@ func (c *Client) Fetch(msg *Message) (resp []byte, err error) {
 		key  = msg.Keys[0]
 		done = make(chan struct{})
 	)
-	consumer, err := NewConsumer(c.subGpName, c.nameServer, Topic{
+	csm, err := NewConsumer(c.subGpName, c.nameServer, done, Topic{
 		Name: msg.RemoteApp + respTopicSuffix,
 		Filter: consumer.MessageSelector{
 			Type:       consumer.TAG,
 			Expression: msg.Tag + tagKeySep + key, // 用来过滤消息的tag组合
 		},
-		Callback: func(ctx context.Context, me ...*primitive.MessageExt) (consumer.ConsumeResult, error) {
-			defer close(done)
-			for _, m := range me {
-				resp = m.Body
-				break
-			}
-			return consumer.ConsumeSuccess, nil
-		},
+		Callback: callback,
 	})
 	if err != nil {
 		return
 	}
-	defer consumer.rkc.Shutdown()
-	<-done
-	if len(resp) == 0 {
-		err = ErrFetchFailed
+	c.triggerAsyncGc()
+	select {
+	case c.usedConsumers <- csm: // 异步调用时，由后台协程清理消费者
+	default:
+		err = ErrReachedLimit
 	}
 	return
+}
+
+// 异步接收RPC响应（通过输入的chan接收响应体）
+func (c *Client) FetchAsync(msg *Message, out chan []byte) (err error) {
+	err = c.consumeAsync(msg, func(m *primitive.MessageExt) (consumer.ConsumeResult, error) {
+		out <- m.Body
+		return consumer.ConsumeSuccess, nil
+	})
+	return
+}
+
+// 异步接收RPC响应（通过输入的函数处理响应体）
+func (c *Client) FetchAsyncWithFunc(msg *Message, f func(body []byte) error) (err error) {
+	err = c.consumeAsync(msg, func(m *primitive.MessageExt) (consumer.ConsumeResult, error) {
+		if err := f(m.Body); err != nil {
+			return consumer.ConsumeRetryLater, nil
+		}
+		return consumer.ConsumeSuccess, nil
+	})
+	return
+}
+
+func (c *Client) triggerAsyncGc() {
+	c.asyncOnce.Do(func() {
+		c.usedConsumers = make(chan *Consumer, c.asyncLimit)
+		go func() {
+			for csm := range c.usedConsumers {
+				<-csm.done
+				time.Sleep(time.Millisecond * 1) // 这里延缓1ms，避免过早关闭消费者造成消费结果未回报
+				csm.rkc.Shutdown()
+			}
+		}()
+	})
 }
