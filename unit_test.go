@@ -75,11 +75,13 @@ func TestOneRPC(t *testing.T) {
 	if c, err = NewClient(nameServer, app2); err != nil {
 		t.Fatal(err)
 	}
+
+	// sync
 	msg := &Message{
 		RemoteApp: app1,
 		Tag:       tag1,
 		Keys:      []string{getRandKey()},
-		Body:      []byte("hello world"),
+		Body:      []byte("hello world 1"),
 	}
 	if err = c.Send(msg); err != nil {
 		t.Fatal(err)
@@ -88,6 +90,42 @@ func TestOneRPC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("rpc succeed with response: %s", resp)
-	time.Sleep(time.Second * 25)
+	t.Logf("rpc 1 succeed with response: %s, keys: %s", resp, msg.Keys)
+
+	// async
+	msg = &Message{
+		RemoteApp: app1,
+		Tag:       tag1,
+		Keys:      []string{getRandKey()},
+		Body:      []byte("hello world 2"),
+	}
+	resChan := make(chan []byte, 1)
+	if err = c.Send(msg); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.FetchAsync(msg, resChan); err != nil {
+		t.Fatal(err)
+	}
+	resp = <-resChan
+	t.Logf("rpc 2 succeed with response: %s, keys: %s", resp, msg.Keys)
+
+	// async func
+
+	msg = &Message{
+		RemoteApp: app1,
+		Tag:       tag1,
+		Keys:      []string{getRandKey()},
+		Body:      []byte("hello world 3"),
+	}
+	if err = c.Send(msg); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.FetchAsyncWithFunc(msg, func(body []byte) error {
+		resp = body
+		t.Logf("rpc 3 succeed with response: %s, keys: %s", resp, msg.Keys)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Second * 10)
 }
