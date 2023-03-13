@@ -46,7 +46,7 @@ type Client struct {
 	asyncOnce     sync.Once
 }
 
-func init() {
+func init() { // 设置rocketMQ客户端日志路径在本可执行文件同目录下
 	ex, err := os.Executable()
 	if err != nil {
 		panic(err)
@@ -105,7 +105,21 @@ func (c *Client) getSrvSubTopic(dispatcher SubDispatcher) Topic {
 	}
 }
 
-func (c *Client) checkMsg(msg *Message) (err error) {
+func (c *Client) checkFetchMsg(msg *Message) (err error) {
+	if msg.Tag == "" || msg.RemoteApp == "" || len(msg.Keys) == 0 {
+		err = ErrMisformedMsg
+	}
+	return
+}
+
+func (c *Client) checkSendMsg(msg *Message) (err error) {
+	if msg.Tag == "" || msg.RemoteApp == "" {
+		err = ErrMisformedMsg
+	}
+	return
+}
+
+func (c *Client) checkRespMsg(msg *Message) (err error) {
 	if msg.Tag == "" || len(msg.Keys) == 0 {
 		err = ErrMisformedMsg
 	}
@@ -126,11 +140,11 @@ func (c *Client) sendMsg(msg *Message) (err error) {
 
 // 响应RPC请求（仅NewSrvClient生成的客户端可用）
 func (c *Client) Respond(msg *Message) (err error) {
-	if err = c.checkMsg(msg); err != nil {
+	if err = c.checkRespMsg(msg); err != nil {
 		return
 	}
 	msg.topic = c.Name + respTopicSuffix
-	msg.Tag += tagKeySep + msg.Keys[0] // 将reqId与tag进行拼接，避免rocketMQ不支持sql92过滤时，在消费端无法过滤消息
+	msg.Tag += tagKeySep + msg.Keys[0] // 将reqId与tag进行拼接，避免rocketMQ不支持sql92过滤时，broker无法过滤消息
 	msg.Keys = msg.Keys[1:]
 	err = c.sendMsg(msg)
 	return
@@ -138,6 +152,9 @@ func (c *Client) Respond(msg *Message) (err error) {
 
 // 发送RPC请求消息
 func (c *Client) Send(msg *Message) (err error) {
+	if err = c.checkSendMsg(msg); err != nil {
+		return
+	}
 	reqId := getUniqKey()
 	msg.Keys = append([]string{reqId}, msg.Keys...) // 将reqId（uuid）插入消息KEYS属性中，方便获取响应
 	msg.topic = msg.RemoteApp + reqTopicSuffix
@@ -147,7 +164,7 @@ func (c *Client) Send(msg *Message) (err error) {
 
 // 同步阻塞接收RPC响应
 func (c *Client) Fetch(msg *Message, timeout ...time.Duration) (resp []byte, err error) {
-	if err = c.checkMsg(msg); err != nil {
+	if err = c.checkFetchMsg(msg); err != nil {
 		return
 	}
 	var (
@@ -185,7 +202,7 @@ func (c *Client) Fetch(msg *Message, timeout ...time.Duration) (resp []byte, err
 }
 
 func (c *Client) consumeAsync(msg *Message, callback SubCallback) (err error) {
-	if err = c.checkMsg(msg); err != nil {
+	if err = c.checkFetchMsg(msg); err != nil {
 		return
 	}
 	var (
