@@ -43,17 +43,17 @@ func (s *SomeService) ProcessMsg(msg *Message) (err error) {
 func (s *SomeService) startMsgLoop() {
 	go func() {
 		for msg := range s.msgQue {
-			log.Printf("ss got message: %+v", msg)
+			log.Printf("ss got message: %s", msg)
 			switch msg.Tag {
 			case tag1:
-				time.Sleep(time.Second * 1)
-				msg.Body = append(msg.Body, "---respooooond"...)
+				time.Sleep(time.Second * 2)
+				msg.Body = append(msg.Body, "---response"...)
 				s.mqClient.Respond(msg)
 			default:
 				log.Print("unknown api tag:", msg.Tag)
 				continue
 			}
-			log.Printf("ss finish message: %+v", msg)
+			log.Printf("ss finish message: %s", msg)
 		}
 	}()
 }
@@ -62,8 +62,8 @@ func getRandKey() string {
 	return strconv.FormatInt(rand.Int63n(10000)+10000, 10)
 }
 
-func TestOneRPC(t *testing.T) {
-	// 首先在rocketmq上新建两个topic：mqlib-test-1-req、mqlib-test-1-resp
+func TestAllRPC(t *testing.T) {
+	// 首先在rocketmq上新建topic：mqlib-test-1-rpc
 	var (
 		s   = newService() // RPC服务端
 		c   *Client        // RPC客户端
@@ -83,14 +83,11 @@ func TestOneRPC(t *testing.T) {
 		Keys:      []string{getRandKey()},
 		Body:      []byte("hello world 1"),
 	}
-	if err = c.Send(msg); err != nil {
-		t.Fatal(err)
-	}
-	resp, err := c.Fetch(msg)
+	msg, err = c.Request(msg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("rpc 1 succeed with response: %s, keys: %s", resp, msg.Keys)
+	t.Logf("rpc 1 succeed with response: %s, keys: %s", msg.Body, msg.Keys)
 
 	// async
 	msg = &Message{
@@ -99,31 +96,23 @@ func TestOneRPC(t *testing.T) {
 		Keys:      []string{getRandKey()},
 		Body:      []byte("hello world 2"),
 	}
-	resChan := make(chan []byte, 1)
-	if err = c.Send(msg); err != nil {
+	resChan := make(chan *Message, 1)
+	if err = c.RequestAsync(msg, resChan); err != nil {
 		t.Fatal(err)
 	}
-	if err = c.FetchAsync(msg, resChan); err != nil {
-		t.Fatal(err)
-	}
-	resp = <-resChan
-	t.Logf("rpc 2 succeed with response: %s, keys: %s", resp, msg.Keys)
+	msg = <-resChan
+	t.Logf("rpc 2 succeed with response: %s, keys: %s", msg.Body, msg.Keys)
 
 	// async func
-
 	msg = &Message{
 		RemoteApp: app1,
 		Tag:       tag1,
 		Keys:      []string{getRandKey()},
 		Body:      []byte("hello world 3"),
 	}
-	if err = c.Send(msg); err != nil {
-		t.Fatal(err)
-	}
-	if err = c.FetchAsyncWithFunc(msg, func(body []byte) error {
-		resp = body
-		t.Logf("rpc 3 succeed with response: %s, keys: %s", resp, msg.Keys)
-		return nil
+	if err = c.RequestAsyncWithFunc(msg, func(m *Message) {
+		msg = m
+		t.Logf("rpc 3 succeed with response: %s, keys: %s", msg.Body, msg.Keys)
 	}); err != nil {
 		t.Fatal(err)
 	}

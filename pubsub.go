@@ -16,9 +16,11 @@ const (
 	DEFAULT_RETRY = 3
 )
 
+type RpcCallback = func(*Message)
 type SubCallback = func(*primitive.MessageExt) (consumer.ConsumeResult, error)
 type realCallback = func(context.Context, ...*primitive.MessageExt) (consumer.ConsumeResult, error)
-type sig = chan struct{}
+
+// type sig = chan struct{}
 
 type Topic struct {
 	Name     string
@@ -53,14 +55,14 @@ type Consumer struct {
 	GroupName string
 	Topics    []Topic
 	rkc       rocketmq.PushConsumer
-	done      sig
+	// done      sig
 }
 
-func NewConsumer(gpName, nsName string, done sig, topics ...Topic) (c *Consumer, err error) {
+func NewConsumer(gpName, nsName string, topics ...Topic) (c *Consumer, err error) {
 	c = &Consumer{
 		GroupName: gpName,
 		Topics:    topics,
-		done:      done,
+		// done:      done,
 	}
 	if c.rkc, err = rocketmq.NewPushConsumer(
 		consumer.WithNsResolver(primitive.NewPassthroughResolver([]string{nsName})),
@@ -72,7 +74,7 @@ func NewConsumer(gpName, nsName string, done sig, topics ...Topic) (c *Consumer,
 		return
 	}
 	for _, t := range c.Topics {
-		if err = c.rkc.Subscribe(t.Name, t.Filter, getRealCallback(t.Callback, done)); err != nil {
+		if err = c.rkc.Subscribe(t.Name, t.Filter, getRealCallback(t.Callback)); err != nil {
 			log.Error("subscribe failed", zap.String("topic", t.Name), zap.String("filter", t.Filter.Expression), zap.Error(err))
 			return
 		}
@@ -83,15 +85,17 @@ func NewConsumer(gpName, nsName string, done sig, topics ...Topic) (c *Consumer,
 	return
 }
 
-func getRealCallback(sc SubCallback, done sig) realCallback {
-	return func(ctx context.Context, me ...*primitive.MessageExt) (consumer.ConsumeResult, error) {
-		defer func() {
-			if done != nil {
-				close(done)
+func getRealCallback(sc SubCallback) realCallback {
+	return func(ctx context.Context, me ...*primitive.MessageExt) (ret consumer.ConsumeResult, err error) {
+		// defer func() {
+		// 	if done != nil {
+		// 		close(done)
+		// 	}
+		// }()
+		for _, m := range me {
+			if ret, err = sc(m); err != nil {
+				return
 			}
-		}()
-		if len(me) > 0 && me[0] != nil {
-			return sc(me[0])
 		}
 		return consumer.ConsumeSuccess, nil
 	}
