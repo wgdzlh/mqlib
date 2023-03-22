@@ -20,8 +20,8 @@ const (
 	subGpSuffix    = "-sub-gp"
 	rpcTopicSuffix = "-rpc"
 	DefaultRpcTTL  = time.Minute * 10 // 默认rpc请求timeout
-	sendRetry      = 3
-	retryInterval  = time.Millisecond * 200
+	sendRetry      = 5
+	retryInterval  = time.Millisecond * 400
 	// rpcGpSep       = "%"
 	// tagKeySep      = "@"
 )
