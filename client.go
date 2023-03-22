@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/wgdzlh/mqlib/log"
@@ -16,12 +17,13 @@ import (
 )
 
 const (
+	pingTopic      = "ping-msg"
 	pubGpSuffix    = "-pub-gp"
 	subGpSuffix    = "-sub-gp"
 	rpcTopicSuffix = "-rpc"
 	DefaultRpcTTL  = time.Minute * 10 // 默认rpc请求timeout
-	sendRetry      = 5
-	retryInterval  = time.Millisecond * 400
+	sendRetry      = 3
+	retryInterval  = time.Millisecond * 200
 	// rpcGpSep       = "%"
 	// tagKeySep      = "@"
 )
@@ -114,6 +116,14 @@ func newClient(nameServer, app string, ttl ...time.Duration) (c *client, err err
 		c.rpcTTL = DefaultRpcTTL
 	}
 	c.pub, err = NewProducer(app+pubGpSuffix, nameServer)
+	if err != nil {
+		return
+	}
+	err = c.SendMessage(&Message{
+		Topic: pingTopic,
+		Tag:   app,
+		Keys:  []string{strconv.FormatInt(time.Now().Unix(), 10)},
+	})
 	return
 }
 
