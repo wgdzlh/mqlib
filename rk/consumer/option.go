@@ -20,8 +20,8 @@ package consumer
 import (
 	"time"
 
-	"github.com/apache/rocketmq-client-go/v2/internal"
-	"github.com/apache/rocketmq-client-go/v2/primitive"
+	"github.com/wgdzlh/mqlib/rk/internal"
+	"github.com/wgdzlh/mqlib/rk/primitive"
 )
 
 type consumerOptions struct {
@@ -118,7 +118,7 @@ func defaultPushConsumerOptions() consumerOptions {
 		ConsumerModel:              Clustering,
 		AutoCommit:                 true,
 		Resolver:                   primitive.NewHttpResolver("DEFAULT"),
-		ConsumeTimestamp: 			time.Now().Add(time.Minute * (-30)).Format("20060102150405"),
+		ConsumeTimestamp:           time.Now().Add(time.Minute * (-30)).Format("20060102150405"),
 	}
 	opts.ClientOptions.GroupName = "DEFAULT_CONSUMER"
 	return opts

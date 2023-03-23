@@ -19,7 +19,7 @@ package remote
 import (
 	"bytes"
 	"context"
-	"github.com/apache/rocketmq-client-go/v2/errors"
+	"github.com/wgdzlh/mqlib/rk/errors"
 	"math/rand"
 	"net"
 	"reflect"

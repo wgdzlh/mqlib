@@ -22,13 +22,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/apache/rocketmq-client-go/v2/rlog"
+	"github.com/wgdzlh/mqlib/rk/rlog"
 
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/tidwall/gjson"
 
-	"github.com/apache/rocketmq-client-go/v2/internal/utils"
-	"github.com/apache/rocketmq-client-go/v2/primitive"
+	"github.com/wgdzlh/mqlib/rk/internal/utils"
+	"github.com/wgdzlh/mqlib/rk/primitive"
 )
 
 func TestHeartbeatData(t *testing.T) {

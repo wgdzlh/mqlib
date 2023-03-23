@@ -20,7 +20,7 @@ package utils
 import (
 	"bytes"
 	"compress/zlib"
-	"github.com/apache/rocketmq-client-go/v2/errors"
+	"github.com/wgdzlh/mqlib/rk/errors"
 	"io/ioutil"
 	"sync"
 )

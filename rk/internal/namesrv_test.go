@@ -26,9 +26,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/apache/rocketmq-client-go/v2/rlog"
+	"github.com/wgdzlh/mqlib/rk/rlog"
 
-	"github.com/apache/rocketmq-client-go/v2/primitive"
+	"github.com/wgdzlh/mqlib/rk/primitive"
 
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/stretchr/testify/assert"

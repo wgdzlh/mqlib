@@ -18,7 +18,7 @@ limitations under the License.
 package internal
 
 import (
-	"github.com/apache/rocketmq-client-go/v2/rlog"
+	"github.com/wgdzlh/mqlib/rk/rlog"
 )
 
 const (

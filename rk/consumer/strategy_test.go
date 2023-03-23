@@ -18,11 +18,11 @@ limitations under the License.
 package consumer
 
 import (
-	"github.com/apache/rocketmq-client-go/v2/rlog"
+	"github.com/wgdzlh/mqlib/rk/rlog"
 	"testing"
 
-	"github.com/apache/rocketmq-client-go/v2/primitive"
 	. "github.com/smartystreets/goconvey/convey"
+	"github.com/wgdzlh/mqlib/rk/primitive"
 )
 
 func TestAllocateByAveragely(t *testing.T) {

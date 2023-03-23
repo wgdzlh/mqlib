@@ -21,8 +21,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/apache/rocketmq-client-go/v2/internal"
-	"github.com/apache/rocketmq-client-go/v2/primitive"
+	"github.com/wgdzlh/mqlib/rk/internal"
+	"github.com/wgdzlh/mqlib/rk/primitive"
 )
 
 // CreateReplyMessage build reply message from the request message

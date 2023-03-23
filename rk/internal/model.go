@@ -25,11 +25,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/apache/rocketmq-client-go/v2/internal/utils"
-	"github.com/apache/rocketmq-client-go/v2/primitive"
-	"github.com/apache/rocketmq-client-go/v2/rlog"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tidwall/gjson"
+	"github.com/wgdzlh/mqlib/rk/internal/utils"
+	"github.com/wgdzlh/mqlib/rk/primitive"
+	"github.com/wgdzlh/mqlib/rk/rlog"
 )
 
 type FindBrokerResult struct {

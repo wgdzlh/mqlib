@@ -19,7 +19,7 @@ package remote
 
 import (
 	"context"
-	"github.com/apache/rocketmq-client-go/v2/errors"
+	"github.com/wgdzlh/mqlib/rk/errors"
 	"sync"
 )
 

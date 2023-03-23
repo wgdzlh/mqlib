@@ -10,9 +10,9 @@ import (
 
 	"github.com/wgdzlh/mqlib/log"
 
-	"github.com/apache/rocketmq-client-go/v2/consumer"
-	"github.com/apache/rocketmq-client-go/v2/primitive"
-	"github.com/apache/rocketmq-client-go/v2/rlog"
+	"github.com/wgdzlh/mqlib/rk/consumer"
+	"github.com/wgdzlh/mqlib/rk/primitive"
+	"github.com/wgdzlh/mqlib/rk/rlog"
 	"go.uber.org/zap"
 )
 
