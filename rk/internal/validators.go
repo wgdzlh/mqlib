@@ -18,19 +18,17 @@ limitations under the License.
 package internal
 
 import (
-	"regexp"
-
 	"github.com/apache/rocketmq-client-go/v2/rlog"
 )
 
 const (
-	_ValidPattern       = "^[%|a-zA-Z0-9_-]+$"
+	// _ValidPattern       = "^[%|a-zA-Z0-9_-]+$"
 	_CharacterMaxLength = 255
 )
 
-var (
-	_Pattern, _ = regexp.Compile(_ValidPattern)
-)
+// var (
+// 	_Pattern, _ = regexp.Compile(_ValidPattern)
+// )
 
 func ValidateGroup(group string) {
 	if group == "" {

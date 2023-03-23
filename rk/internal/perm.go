@@ -32,27 +32,27 @@ func queueIsWriteable(perm int) bool {
 	return (perm & permWrite) == permWrite
 }
 
-func queueIsInherited(perm int) bool {
-	return (perm & permInherit) == permInherit
-}
+// func queueIsInherited(perm int) bool {
+// 	return (perm & permInherit) == permInherit
+// }
 
-func perm2string(perm int) string {
-	bytes := make([]byte, 3)
-	for i := 0; i < 3; i++ {
-		bytes[i] = '-'
-	}
+// func perm2string(perm int) string {
+// 	bytes := make([]byte, 3)
+// 	for i := 0; i < 3; i++ {
+// 		bytes[i] = '-'
+// 	}
 
-	if queueIsReadable(perm) {
-		bytes[0] = 'R'
-	}
+// 	if queueIsReadable(perm) {
+// 		bytes[0] = 'R'
+// 	}
 
-	if queueIsWriteable(perm) {
-		bytes[1] = 'W'
-	}
+// 	if queueIsWriteable(perm) {
+// 		bytes[1] = 'W'
+// 	}
 
-	if queueIsInherited(perm) {
-		bytes[2] = 'X'
-	}
+// 	if queueIsInherited(perm) {
+// 		bytes[2] = 'X'
+// 	}
 
-	return string(bytes)
-}
+// 	return string(bytes)
+// }

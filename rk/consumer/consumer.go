@@ -858,8 +858,8 @@ func (dc *defaultConsumer) pullInner(ctx context.Context, queue *primitive.Messa
 		SysFlag:       sysFlag,
 		CommitOffset:  commitOffsetValue,
 		// TODO: 和java对齐
-		SuspendTimeoutMillis: _BrokerSuspendMaxTime,
-		SubExpression:        data.SubString,
+		SuspendTimeout: _BrokerSuspendMaxTime,
+		SubExpression:  data.SubString,
 		// TODO: add subversion
 		ExpressionType: string(data.ExpType),
 	}

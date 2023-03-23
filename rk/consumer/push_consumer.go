@@ -721,16 +721,16 @@ func (pc *pushConsumer) pullMessage(request *PullRequest) {
 		sysFlag := buildSysFlag(commitOffsetEnable, true, subExpression != "", classFilter)
 
 		pullRequest := &internal.PullMessageRequestHeader{
-			ConsumerGroup:        pc.consumerGroup,
-			Topic:                request.mq.Topic,
-			QueueId:              int32(request.mq.QueueId),
-			QueueOffset:          request.nextOffset,
-			MaxMsgNums:           pc.option.PullBatchSize,
-			SysFlag:              sysFlag,
-			CommitOffset:         commitOffsetValue,
-			SubExpression:        subExpression,
-			ExpressionType:       string(TAG),
-			SuspendTimeoutMillis: 20 * time.Second,
+			ConsumerGroup:  pc.consumerGroup,
+			Topic:          request.mq.Topic,
+			QueueId:        int32(request.mq.QueueId),
+			QueueOffset:    request.nextOffset,
+			MaxMsgNums:     pc.option.PullBatchSize,
+			SysFlag:        sysFlag,
+			CommitOffset:   commitOffsetValue,
+			SubExpression:  subExpression,
+			ExpressionType: string(TAG),
+			SuspendTimeout: 20 * time.Second,
 		}
 		//
 		//if data.ExpType == string(TAG) {

@@ -6,10 +6,10 @@ require (
 	github.com/BurntSushi/toml v1.1.0 // indirect
 	github.com/emirpasic/gods v1.12.0
 	github.com/golang/mock v1.3.1
+	github.com/google/uuid v1.3.0
 	github.com/json-iterator/go v1.1.12
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.8.1
-	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.0
 	github.com/smartystreets/goconvey v1.6.4
 	github.com/stathat/consistent v1.0.0

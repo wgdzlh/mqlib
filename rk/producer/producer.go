@@ -26,15 +26,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pkg/errors"
-	uuid "github.com/satori/go.uuid"
-
 	errors2 "github.com/apache/rocketmq-client-go/v2/errors"
 	"github.com/apache/rocketmq-client-go/v2/internal"
 	"github.com/apache/rocketmq-client-go/v2/internal/remote"
 	"github.com/apache/rocketmq-client-go/v2/internal/utils"
 	"github.com/apache/rocketmq-client-go/v2/primitive"
 	"github.com/apache/rocketmq-client-go/v2/rlog"
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
 )
 
 type defaultProducer struct {
@@ -154,7 +153,7 @@ func MarshalMessageBatch(msgs ...*primitive.Message) []byte {
 }
 
 func (p *defaultProducer) prepareSendRequest(msg *primitive.Message, ttl time.Duration) (string, error) {
-	correlationId := uuid.NewV4().String()
+	correlationId := uuid.New().String()
 	requestClientId := p.client.ClientID()
 	msg.WithProperty(primitive.PropertyCorrelationID, correlationId)
 	msg.WithProperty(primitive.PropertyMessageReplyToClient, requestClientId)
@@ -250,8 +249,9 @@ func (p *defaultProducer) RequestAsync(ctx context.Context, timeout time.Duratio
 		resErr = p.interceptor(ctx, msg, nil, func(ctx context.Context, req, reply interface{}) error {
 			return p.sendAsync(ctx, msg, f)
 		})
+	} else {
+		resErr = p.sendAsync(ctx, msg, f)
 	}
-	resErr = p.sendAsync(ctx, msg, f)
 	if resErr != nil {
 		internal.RequestResponseFutureMap.RemoveRequestResponseFuture(correlationId)
 	}
@@ -274,7 +274,7 @@ func (p *defaultProducer) SendSync(ctx context.Context, msgs ...*primitive.Messa
 			ProducerGroup:     p.group,
 			CommunicationMode: primitive.SendSync,
 			BornHost:          utils.LocalIP,
-			Message:           *msg,
+			Message:           msg,
 			SendResult:        resp,
 		}
 		ctx = primitive.WithProducerCtx(ctx, producerCtx)

@@ -19,13 +19,14 @@ package internal
 
 import (
 	"fmt"
-	"github.com/apache/rocketmq-client-go/v2/rlog"
 	"net"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/apache/rocketmq-client-go/v2/rlog"
 
 	"github.com/apache/rocketmq-client-go/v2/primitive"
 
@@ -84,7 +85,7 @@ func TestUpdateNameServerAddress(t *testing.T) {
 			"192.168.100.5",
 		}
 		http.HandleFunc("/nameserver/addrs", func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprintf(w, strings.Join(srvs, ";"))
+			fmt.Fprint(w, strings.Join(srvs, ";"))
 		})
 		server := &http.Server{Addr: ":0", Handler: nil}
 		listener, _ := net.Listen("tcp", ":0")

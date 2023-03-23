@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/tidwall/gjson"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,6 +29,7 @@ import (
 	"github.com/apache/rocketmq-client-go/v2/primitive"
 	"github.com/apache/rocketmq-client-go/v2/rlog"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/tidwall/gjson"
 )
 
 type FindBrokerResult struct {
@@ -177,7 +177,7 @@ func (info ConsumerRunningInfo) Encode() ([]byte, error) {
 		sub1 := subs[i]
 		sub2 := subs[j]
 		if sub1.ClassFilterMode != sub2.ClassFilterMode {
-			return sub1.ClassFilterMode == false
+			return !sub1.ClassFilterMode
 		}
 		com := strings.Compare(sub1.Topic, sub1.Topic)
 		if com != 0 {
@@ -248,8 +248,8 @@ func (info ConsumerRunningInfo) Encode() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		dataV, err := json.Marshal(info.MQTable[keys[idx]])
-		tableJson = fmt.Sprintf("%s,%s:%s", tableJson, string(dataK), string(dataV))
+		dataV, _ := json.Marshal(info.MQTable[keys[idx]])
+		tableJson = fmt.Sprintf("%s,%s:%s", tableJson, string(dataK), dataV)
 	}
 	tableJson = strings.TrimLeft(tableJson, ",")
 
@@ -393,7 +393,7 @@ func parseFastJsonFormat(body []byte) map[primitive.MessageQueue]int64 {
 
 		var err error
 		// ignore err for now
-		offset, err := strconv.Atoi(tuple[1])
+		offset, _ := strconv.Atoi(tuple[1])
 
 		var queue primitive.MessageQueue
 		err = json.Unmarshal([]byte(queueStr), &queue)

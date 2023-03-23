@@ -54,7 +54,6 @@ func NewRequestResponseFutureMap() *requestResponseFutureCache {
 		if rrf.IsTimeout() {
 			rrf.CauseErr = fmt.Errorf("correlationId:%s request timeout, no reply message", s)
 		}
-		rrf.ExecuteRequestCallback()
 	})
 	return &tmpRrfCache
 }
@@ -71,9 +70,7 @@ func (fm *requestResponseFutureCache) SetResponseToRequestResponseFuture(correla
 		return errors.Wrapf(nil, "correlationId:%s not exist in map", correlationId)
 	}
 	rrf.PutResponseMessage(reply)
-	if rrf.RequestCallback != nil {
-		rrf.ExecuteRequestCallback()
-	}
+	rrf.ExecuteRequestCallback()
 	return nil
 }
 
@@ -120,7 +117,6 @@ func (rf *RequestResponseFuture) ExecuteRequestCallback() {
 	if rf.RequestCallback == nil {
 		return
 	}
-
 	rf.RequestCallback(context.Background(), rf.ResponseMsg, rf.CauseErr)
 }
 

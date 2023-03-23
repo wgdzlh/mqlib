@@ -60,17 +60,17 @@ const (
 var (
 	ErrServiceState = errors2.ErrService
 
-	_VIPChannelEnable = false
+	// _VIPChannelEnable = false
 )
 
-func init() {
-	if os.Getenv("com.rocketmq.sendMessageWithVIPChannel") != "" {
-		value, err := strconv.ParseBool(os.Getenv("com.rocketmq.sendMessageWithVIPChannel"))
-		if err == nil {
-			_VIPChannelEnable = value
-		}
-	}
-}
+// func init() {
+// 	if os.Getenv("com.rocketmq.sendMessageWithVIPChannel") != "" {
+// 		value, err := strconv.ParseBool(os.Getenv("com.rocketmq.sendMessageWithVIPChannel"))
+// 		if err == nil {
+// 			_VIPChannelEnable = value
+// 		}
+// 	}
+// }
 
 type InnerProducer interface {
 	PublishTopicList() []string
@@ -144,11 +144,11 @@ type RMQClient interface {
 	RegisterProducer(group string, producer InnerProducer) error
 	UnregisterProducer(group string)
 	InvokeSync(ctx context.Context, addr string, request *remote.RemotingCommand,
-		timeoutMillis time.Duration) (*remote.RemotingCommand, error)
+		timeout time.Duration) (*remote.RemotingCommand, error)
 	InvokeAsync(ctx context.Context, addr string, request *remote.RemotingCommand,
 		f func(*remote.RemotingCommand, error)) error
 	InvokeOneWay(ctx context.Context, addr string, request *remote.RemotingCommand,
-		timeoutMillis time.Duration) error
+		timeout time.Duration) error
 	CheckClientInBroker()
 	SendHeartbeatToAllBrokerWithLock()
 	UpdateTopicRouteInfo()
@@ -543,12 +543,12 @@ func (c *rmqClient) ClientID() string {
 }
 
 func (c *rmqClient) InvokeSync(ctx context.Context, addr string, request *remote.RemotingCommand,
-	timeoutMillis time.Duration) (*remote.RemotingCommand, error) {
+	timeout time.Duration) (*remote.RemotingCommand, error) {
 	if c.close {
 		return nil, ErrServiceState
 	}
 	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(ctx, timeoutMillis)
+	ctx, cancel = context.WithTimeout(ctx, timeout)
 	defer cancel()
 	return c.remoteClient.InvokeSync(ctx, addr, request)
 }
@@ -565,7 +565,7 @@ func (c *rmqClient) InvokeAsync(ctx context.Context, addr string, request *remot
 }
 
 func (c *rmqClient) InvokeOneWay(ctx context.Context, addr string, request *remote.RemotingCommand,
-	timeoutMillis time.Duration) error {
+	timeout time.Duration) error {
 	if c.close {
 		return ErrServiceState
 	}
@@ -881,18 +881,18 @@ func (c *rmqClient) updateSubscribeInfo(topic string, data *TopicRouteData, chan
 	})
 }
 
-func (c *rmqClient) isNeedUpdateSubscribeInfo(topic string) bool {
-	var result bool
-	c.consumerMap.Range(func(key, value interface{}) bool {
-		consumer := value.(InnerConsumer)
-		if consumer.IsSubscribeTopicNeedUpdate(topic) {
-			result = true
-			return false
-		}
-		return true
-	})
-	return result
-}
+// func (c *rmqClient) isNeedUpdateSubscribeInfo(topic string) bool {
+// 	var result bool
+// 	c.consumerMap.Range(func(key, value interface{}) bool {
+// 		consumer := value.(InnerConsumer)
+// 		if consumer.IsSubscribeTopicNeedUpdate(topic) {
+// 			result = true
+// 			return false
+// 		}
+// 		return true
+// 	})
+// 	return result
+// }
 
 func (c *rmqClient) resetOffset(topic string, group string, offsetTable map[primitive.MessageQueue]int64) {
 	consumer, exist := c.consumerMap.Load(group)
@@ -953,18 +953,18 @@ func routeData2SubscribeInfo(topic string, data *TopicRouteData) []*primitive.Me
 	return list
 }
 
-func brokerVIPChannel(brokerAddr string) string {
-	if !_VIPChannelEnable {
-		return brokerAddr
-	}
-	var brokerAddrNew strings.Builder
-	ipAndPort := strings.Split(brokerAddr, ":")
-	port, err := strconv.Atoi(ipAndPort[1])
-	if err != nil {
-		return ""
-	}
-	brokerAddrNew.WriteString(ipAndPort[0])
-	brokerAddrNew.WriteString(":")
-	brokerAddrNew.WriteString(strconv.Itoa(port - 2))
-	return brokerAddrNew.String()
-}
+// func brokerVIPChannel(brokerAddr string) string {
+// 	if !_VIPChannelEnable {
+// 		return brokerAddr
+// 	}
+// 	var brokerAddrNew strings.Builder
+// 	ipAndPort := strings.Split(brokerAddr, ":")
+// 	port, err := strconv.Atoi(ipAndPort[1])
+// 	if err != nil {
+// 		return ""
+// 	}
+// 	brokerAddrNew.WriteString(ipAndPort[0])
+// 	brokerAddrNew.WriteString(":")
+// 	brokerAddrNew.WriteString(strconv.Itoa(port - 2))
+// 	return brokerAddrNew.String()
+// }
