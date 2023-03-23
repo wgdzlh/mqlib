@@ -62,7 +62,7 @@ func NewSrvClient(nameServer, app string, subDispatcher SubDispatcher) (rsc RpcS
 		return
 	}
 	apiSubTopic := c.getSrvSubTopic(subDispatcher)
-	c.sub, err = NewConsumer(app+subGpSuffix, nameServer, apiSubTopic)
+	c.sub, err = NewConsumer(app+subGpSuffix, nameServer, false, apiSubTopic)
 	rsc = c
 	return
 }
@@ -78,7 +78,17 @@ func NewSubClient(nameServer, consumerGroup string, topics ...Topic) (sc SubClie
 		Name:       consumerGroup,
 		nameServer: nameServer,
 	}
-	c.sub, err = NewConsumer(consumerGroup, nameServer, topics...)
+	c.sub, err = NewConsumer(consumerGroup, nameServer, false, topics...)
+	return c, err
+}
+
+// 以广播模式订阅消息的MQ客户端
+func NewBroadcastSubClient(nameServer, consumerGroup string, topics ...Topic) (sc SubClient, err error) {
+	c := &client{
+		Name:       consumerGroup,
+		nameServer: nameServer,
+	}
+	c.sub, err = NewConsumer(consumerGroup, nameServer, true, topics...)
 	return c, err
 }
 
@@ -88,7 +98,7 @@ func NewPubSubClient(nameServer, consumerGroup string, topics ...Topic) (psc Pub
 	if err != nil {
 		return
 	}
-	c.sub, err = NewConsumer(consumerGroup, nameServer, topics...)
+	c.sub, err = NewConsumer(consumerGroup, nameServer, false, topics...)
 	psc = c
 	return
 }
@@ -100,7 +110,7 @@ func NewGenericClient(nameServer, app string, subDispatcher SubDispatcher, ttl t
 		return
 	}
 	topics = append(topics, c.getSrvSubTopic(subDispatcher))
-	c.sub, err = NewConsumer(app+subGpSuffix, nameServer, topics...)
+	c.sub, err = NewConsumer(app+subGpSuffix, nameServer, false, topics...)
 	gc = c
 	return
 }

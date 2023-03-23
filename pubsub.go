@@ -53,14 +53,19 @@ type Consumer struct {
 	rkc       rocketmq.PushConsumer
 }
 
-func NewConsumer(gpName, nsName string, topics ...Topic) (c *Consumer, err error) {
+func NewConsumer(gpName, nsName string, broadcast bool, topics ...Topic) (c *Consumer, err error) {
 	c = &Consumer{
 		GroupName: gpName,
 		Topics:    topics,
 	}
+	consumerModel := consumer.Clustering
+	if broadcast {
+		consumerModel = consumer.BroadCasting
+	}
 	if c.rkc, err = rocketmq.NewPushConsumer(
 		consumer.WithNsResolver(primitive.NewPassthroughResolver([]string{nsName})),
 		consumer.WithGroupName(gpName),
+		consumer.WithConsumerModel(consumerModel),
 		consumer.WithConsumeFromWhere(consumer.ConsumeFromLastOffset),
 		consumer.WithRetry(DEFAULT_RETRY),
 	); err != nil {
