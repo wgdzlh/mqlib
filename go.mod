@@ -29,3 +29,5 @@ require (
 	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 )
+
+replace github.com/apache/rocketmq-client-go/v2 => ./rk
