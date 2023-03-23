@@ -255,16 +255,12 @@ func (c *client) RequestAsyncWithFunc(msg *Message, callback RpcCallback, ctx ..
 	if err != nil {
 		return
 	}
-	var resp *Message
 	err = c.pub.rkp.RequestAsync(tx, ttl, func(ctx context.Context, m *primitive.Message, e error) {
-		if resp != nil { // 保证callback只调用一次（临时方案，SDK有bug待修正）
-			return
-		}
 		if e != nil {
 			log.Error("async request failed", zap.Error(e))
 			return
 		}
-		resp = msgFromRkMsg(m)
+		resp := msgFromRkMsg(m)
 		resp.RemoteApp = msg.RemoteApp
 		callback(resp)
 		log.Info("async request succeed", zap.String("tag", resp.Tag), zap.Any("keys", resp.Keys))
