@@ -146,7 +146,7 @@ type ConsumeStatus struct {
 
 type ConsumerRunningInfo struct {
 	Properties       map[string]string
-	SubscriptionData map[*SubscriptionData]bool
+	SubscriptionData map[*SubscriptionData]struct{}
 	MQTable          map[primitive.MessageQueue]ProcessQueueInfo
 	StatusTable      map[string]ConsumeStatus
 	JStack           string // just follow java request param name, but pass golang stack here.
@@ -263,7 +263,7 @@ func (info ConsumerRunningInfo) Encode() ([]byte, error) {
 func NewConsumerRunningInfo() *ConsumerRunningInfo {
 	return &ConsumerRunningInfo{
 		Properties:       make(map[string]string),
-		SubscriptionData: make(map[*SubscriptionData]bool),
+		SubscriptionData: make(map[*SubscriptionData]struct{}),
 		MQTable:          make(map[primitive.MessageQueue]ProcessQueueInfo),
 		StatusTable:      make(map[string]ConsumeStatus),
 	}

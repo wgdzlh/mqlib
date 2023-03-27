@@ -88,7 +88,7 @@ type consumerOptions struct {
 	MaxReconsumeTimes int32
 
 	// Suspending pulling time for cases requiring slow pulling like flow-control scenario.
-	SuspendCurrentQueueTimeMillis time.Duration
+	SuspendCurrentQueueTime time.Duration
 
 	// Maximum amount of time a message may block the consuming thread.
 	ConsumeTimeout time.Duration
@@ -263,7 +263,7 @@ func WithAutoCommit(auto bool) Option {
 
 func WithSuspendCurrentQueueTimeMillis(suspendT time.Duration) Option {
 	return func(options *consumerOptions) {
-		options.SuspendCurrentQueueTimeMillis = suspendT
+		options.SuspendCurrentQueueTime = suspendT
 	}
 }
 

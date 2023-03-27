@@ -20,17 +20,14 @@ package consumer
 import (
 	"strconv"
 	"sync"
-
 	"time"
 
 	"github.com/emirpasic/gods/maps/treemap"
 	"github.com/emirpasic/gods/utils"
-	gods_util "github.com/emirpasic/gods/utils"
 	"go.uber.org/atomic"
 
 	"github.com/wgdzlh/mqlib/rk/internal"
 	"github.com/wgdzlh/mqlib/rk/primitive"
-	"github.com/wgdzlh/mqlib/rk/rlog"
 )
 
 const (
@@ -40,6 +37,7 @@ const (
 )
 
 type processQueue struct {
+	// consumeLock                sync.Mutex
 	cachedMsgCount             *atomic.Int64
 	cachedMsgSize              *atomic.Int64
 	tryUnlockTimes             int64
@@ -47,7 +45,6 @@ type processQueue struct {
 	msgAccCnt                  int64
 	msgCache                   *treemap.Map
 	mutex                      sync.RWMutex
-	consumeLock                sync.Mutex
 	consumingMsgOrderlyTreeMap *treemap.Map
 	dropped                    *atomic.Bool
 	lastPullTime               atomic.Value
@@ -63,7 +60,7 @@ type processQueue struct {
 }
 
 func newProcessQueue(order bool) *processQueue {
-	consumingMsgOrderlyTreeMap := treemap.NewWith(gods_util.Int64Comparator)
+	consumingMsgOrderlyTreeMap := treemap.NewWith(utils.Int64Comparator)
 
 	lastConsumeTime := atomic.Value{}
 	lastConsumeTime.Store(time.Now())
@@ -227,13 +224,14 @@ func (pq *processQueue) removeMessage(messages ...*primitive.MessageExt) int64 {
 }
 
 func (pq *processQueue) isLockExpired() bool {
-	return time.Now().Sub(pq.LastLockTime()) > _RebalanceLockMaxTime
+	return time.Since(pq.LastLockTime()) > _RebalanceLockMaxTime
 }
 
 func (pq *processQueue) isPullExpired() bool {
-	return time.Now().Sub(pq.LastPullTime()) > _PullMaxIdleTime
+	return time.Since(pq.LastPullTime()) > _PullMaxIdleTime
 }
 
+/* TODO
 func (pq *processQueue) cleanExpiredMsg(consumer *defaultConsumer) {
 	if consumer.option.ConsumeOrderly {
 		return
@@ -278,6 +276,7 @@ func (pq *processQueue) cleanExpiredMsg(consumer *defaultConsumer) {
 		pq.removeMessage(msg)
 	}
 }
+*/
 
 func (pq *processQueue) getMaxSpan() int {
 	pq.mutex.RLock()

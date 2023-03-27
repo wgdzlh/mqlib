@@ -53,10 +53,10 @@ const (
 	_BrokerSuspendMaxTime = 20 * time.Second
 
 	// Long polling mode, the Consumer connection timeout (must greater than _BrokerSuspendMaxTime)
-	_ConsumerTimeoutWhenSuspend = 30 * time.Second
+	// _ConsumerTimeoutWhenSuspend = 30 * time.Second
 
 	// Offset persistent interval for consumer
-	_PersistConsumerOffsetInterval = 5 * time.Second
+	// _PersistConsumerOffsetInterval = 5 * time.Second
 )
 
 type ConsumeType string
@@ -531,7 +531,7 @@ func (dc *defaultConsumer) lockAll() {
 			MQs:           mqs,
 		}
 		lockedMQ := dc.doLock(brokerResult.BrokerAddr, body)
-		set := make(map[primitive.MessageQueue]bool)
+		set := make(map[primitive.MessageQueue]struct{})
 		for idx := range lockedMQ {
 			_mq := lockedMQ[idx]
 			v, exist := dc.processQueueTable.Load(_mq)
@@ -540,11 +540,11 @@ func (dc *defaultConsumer) lockAll() {
 				pq.WithLock(true)
 				pq.UpdateLastConsumeTime()
 			}
-			set[_mq] = true
+			set[_mq] = struct{}{}
 		}
 		for idx := range mqs {
 			_mq := mqs[idx]
-			if !set[*_mq] {
+			if _, ok := set[*_mq]; !ok {
 				v, exist := dc.processQueueTable.Load(_mq)
 				if exist {
 					pq := v.(*processQueue)
@@ -632,12 +632,12 @@ func (dc *defaultConsumer) doUnlock(addr string, body *lockBatchRequestBody, one
 		}
 	} else {
 		response, err := dc.client.InvokeSync(context.Background(), addr, request, 1*time.Second)
-		rlog.Error("lock MessageQueue to broker invoke error", map[string]interface{}{
-			rlog.LogKeyBroker:        addr,
-			rlog.LogKeyUnderlayError: err,
-		})
-		if response.Code != internal.ResSuccess {
-			// TODO error
+		if err != nil || response == nil || response.Code != internal.ResSuccess {
+			rlog.Error("lock MessageQueue to broker invoke error", map[string]interface{}{
+				rlog.LogKeyBroker:        addr,
+				rlog.LogKeyUnderlayError: err,
+				"response":               response,
+			})
 		}
 	}
 }
@@ -661,15 +661,15 @@ func (dc *defaultConsumer) buildProcessQueueTableByBrokerName() map[string][]*pr
 
 func (dc *defaultConsumer) updateProcessQueueTable(topic string, mqs []*primitive.MessageQueue) bool {
 	var changed bool
-	mqSet := make(map[primitive.MessageQueue]bool)
+	mqSet := make(map[primitive.MessageQueue]struct{})
 	for idx := range mqs {
-		mqSet[*mqs[idx]] = true
+		mqSet[*mqs[idx]] = struct{}{}
 	}
 	dc.processQueueTable.Range(func(key, value interface{}) bool {
 		mq := key.(primitive.MessageQueue)
 		pq := value.(*processQueue)
 		if mq.Topic == topic {
-			if !mqSet[mq] {
+			if _, ok := mqSet[mq]; !ok {
 				pq.WithDropped(true)
 				if dc.removeUnnecessaryMessageQueue(&mq, pq) {
 					dc.processQueueTable.Delete(key)
@@ -754,10 +754,10 @@ func (dc *defaultConsumer) removeUnnecessaryMessageQueue(mq *primitive.MessageQu
 }
 
 // Deprecated: Use computePullFromWhereWithException instead.
-func (dc *defaultConsumer) computePullFromWhere(mq *primitive.MessageQueue) int64 {
-	result, _ := dc.computePullFromWhereWithException(mq)
-	return result
-}
+// func (dc *defaultConsumer) computePullFromWhere(mq *primitive.MessageQueue) int64 {
+// 	result, _ := dc.computePullFromWhereWithException(mq)
+// 	return result
+// }
 
 func (dc *defaultConsumer) computePullFromWhereWithException(mq *primitive.MessageQueue) (int64, error) {
 	if dc.cType == _PullConsume {
@@ -943,9 +943,9 @@ func (dc *defaultConsumer) findConsumerList(topic string) []string {
 	return nil
 }
 
-func (dc *defaultConsumer) sendBack(msg *primitive.MessageExt, level int) error {
-	return nil
-}
+// func (dc *defaultConsumer) sendBack(msg *primitive.MessageExt, level int) error {
+// 	return nil
+// }
 
 // QueryMaxOffset with specific queueId and topic
 func (dc *defaultConsumer) queryMaxOffset(mq *primitive.MessageQueue) (int64, error) {

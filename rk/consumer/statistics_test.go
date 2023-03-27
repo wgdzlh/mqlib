@@ -36,7 +36,7 @@ func abs(a float64) float64 {
 
 func TestNextMinuteTime(t *testing.T) {
 	nextMinute := nextMinutesTime()
-	minuteElapse := nextMinute.Sub(time.Now()).Minutes()
+	minuteElapse := time.Until(nextMinute).Minutes()
 	if !almostEqual(minuteElapse, 1.0) {
 		t.Errorf("wrong next one minute. want=%f, got=%f", 1.0, minuteElapse)
 	}
@@ -44,7 +44,7 @@ func TestNextMinuteTime(t *testing.T) {
 
 func TestNextHourTime(t *testing.T) {
 	nextHour := nextHourTime()
-	hourElapse := nextHour.Sub(time.Now()).Hours()
+	hourElapse := time.Until(nextHour).Hours()
 	if !almostEqual(hourElapse, 1.0) {
 		t.Errorf("wrong next one hour. want=%f, got=%f", 1.0, hourElapse)
 	}
@@ -217,10 +217,10 @@ func TestNewStatsManager(t *testing.T) {
 	stats := NewStatsManager()
 
 	st := time.Now()
-	for  {
+	for {
 		stats.increasePullTPS("rocketmq", "default", 1)
-		time.Sleep(500*time.Millisecond)
-		if time.Now().Sub(st) > 5*time.Minute {
+		time.Sleep(500 * time.Millisecond)
+		if time.Since(st) > 5*time.Minute {
 			break
 		}
 	}

@@ -656,12 +656,12 @@ func (c *rmqClient) SendHeartbeatToAllBrokerWithLock() {
 }
 
 func (c *rmqClient) UpdateTopicRouteInfo() {
-	publishTopicSet := make(map[string]bool, 0)
+	publishTopicSet := make(map[string]struct{}, 0)
 	c.producerMap.Range(func(key, value interface{}) bool {
 		producer := value.(InnerProducer)
 		list := producer.PublishTopicList()
 		for idx := range list {
-			publishTopicSet[list[idx]] = true
+			publishTopicSet[list[idx]] = struct{}{}
 		}
 		return true
 	})
@@ -670,12 +670,12 @@ func (c *rmqClient) UpdateTopicRouteInfo() {
 		c.UpdatePublishInfo(topic, data, changed)
 	}
 
-	subscribedTopicSet := make(map[string]bool, 0)
+	subscribedTopicSet := make(map[string]struct{}, 0)
 	c.consumerMap.Range(func(key, value interface{}) bool {
 		consumer := value.(InnerConsumer)
 		list := consumer.SubscriptionDataList()
 		for idx := range list {
-			subscribedTopicSet[list[idx].Topic] = true
+			subscribedTopicSet[list[idx].Topic] = struct{}{}
 		}
 		return true
 	})
@@ -792,14 +792,13 @@ func (c *rmqClient) decodeCommandCustomHeader(pr *primitive.PullResult, cmd *rem
 }
 
 func (c *rmqClient) RegisterConsumer(group string, consumer InnerConsumer) error {
-	_, exist := c.consumerMap.Load(group)
+	_, exist := c.consumerMap.LoadOrStore(group, consumer)
 	if exist {
 		rlog.Warning("the consumer group exist already", map[string]interface{}{
 			rlog.LogKeyConsumerGroup: group,
 		})
 		return fmt.Errorf("the consumer group exist already")
 	}
-	c.consumerMap.Store(group, consumer)
 	return nil
 }
 
@@ -808,14 +807,13 @@ func (c *rmqClient) UnregisterConsumer(group string) {
 }
 
 func (c *rmqClient) RegisterProducer(group string, producer InnerProducer) error {
-	_, exist := c.producerMap.Load(group)
+	_, exist := c.producerMap.LoadOrStore(group, producer)
 	if exist {
 		rlog.Warning("the producer group exist already", map[string]interface{}{
 			rlog.LogKeyProducerGroup: group,
 		})
 		return fmt.Errorf("the producer group exist already")
 	}
-	c.producerMap.Store(group, producer)
 	return nil
 }
 

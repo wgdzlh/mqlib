@@ -150,10 +150,8 @@ func (local *localFileOffsetStore) load() {
 		return
 	}
 
-	if datas != nil {
-		for k, v := range datas {
-			local.OffsetTable.Store(k, v)
-		}
+	for k, v := range datas {
+		local.OffsetTable.Store(k, v)
 	}
 }
 

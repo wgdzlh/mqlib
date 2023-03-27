@@ -62,13 +62,13 @@ var (
 type defaultPullConsumer struct {
 	*defaultConsumer
 
-	option    consumerOptions
-	client    internal.RMQClient
+	// option    consumerOptions
+	// client    internal.RMQClient
 	GroupName string
 	Model     MessageModel
 	UnitMode  bool
 
-	interceptor primitive.Interceptor
+	// interceptor primitive.Interceptor
 }
 
 func NewPullConsumer(options ...Option) (*defaultPullConsumer, error) {
@@ -212,12 +212,12 @@ func (c *defaultPullConsumer) pull(ctx context.Context, mq *primitive.MessageQue
 	return pullResp, err
 }
 
-func (c *defaultPullConsumer) makeSureStateOK() error {
-	if atomic.LoadInt32(&c.state) != int32(internal.StateRunning) {
-		return fmt.Errorf("the consumer state is [%d], not running", c.state)
-	}
-	return nil
-}
+// func (c *defaultPullConsumer) makeSureStateOK() error {
+// 	if atomic.LoadInt32(&c.state) != int32(internal.StateRunning) {
+// 		return fmt.Errorf("the consumer state is [%d], not running", c.state)
+// 	}
+// 	return nil
+// }
 
 func (c *defaultPullConsumer) nextOffsetOf(queue *primitive.MessageQueue) int64 {
 	result, _ := c.computePullFromWhereWithException(queue)

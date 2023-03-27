@@ -19,13 +19,13 @@ package consumer
 
 import (
 	"context"
-	"github.com/wgdzlh/mqlib/rk/rlog"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/wgdzlh/mqlib/rk/internal"
 	"github.com/wgdzlh/mqlib/rk/primitive"
+	"github.com/wgdzlh/mqlib/rk/rlog"
 )
 
 func mockB4Start(c *pushConsumer) {
@@ -53,6 +53,9 @@ func TestStart(t *testing.T) {
 			})
 			return ConsumeSuccess, nil
 		})
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		_, exists := c.subscriptionDataTable.Load("TopicTest")
 		So(exists, ShouldBeTrue)
