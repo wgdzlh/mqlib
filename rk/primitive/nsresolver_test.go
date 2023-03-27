@@ -18,13 +18,14 @@ package primitive
 
 import (
 	"fmt"
-	"github.com/wgdzlh/mqlib/rk/rlog"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/wgdzlh/mqlib/rk/rlog"
 
 	. "github.com/smartystreets/goconvey/convey"
 )
@@ -58,7 +59,7 @@ func TestHttpResolverWithGet(t *testing.T) {
 			"192.168.100.5",
 		}
 		http.HandleFunc("/nameserver/addrs2", func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprintf(w, strings.Join(srvs, ";"))
+			fmt.Fprint(w, strings.Join(srvs, ";"))
 		})
 		server := &http.Server{Addr: ":0", Handler: nil}
 		listener, _ := net.Listen("tcp", ":0")

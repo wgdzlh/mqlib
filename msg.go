@@ -26,7 +26,7 @@ func (m *Message) ToRkMessage() *primitive.Message {
 }
 
 func msgFromRkMsg(m *primitive.Message) *Message {
-	keys := strings.Split(strings.TrimSuffix(m.GetKeys(), primitive.PropertyKeySeparator), primitive.PropertyKeySeparator)
+	keys := strings.Split(m.GetKeys(), primitive.PropertyKeySeparator)
 	return &Message{
 		Tag:  m.GetTags(),
 		Keys: keys,
@@ -35,7 +35,7 @@ func msgFromRkMsg(m *primitive.Message) *Message {
 }
 
 func msgFromRkMsgExt(me *primitive.MessageExt) *Message {
-	keys := strings.Split(strings.TrimSuffix(me.GetKeys(), primitive.PropertyKeySeparator), primitive.PropertyKeySeparator)
+	keys := strings.Split(me.GetKeys(), primitive.PropertyKeySeparator)
 	return &Message{
 		Topic:  me.Topic,
 		Tag:    me.GetTags(),

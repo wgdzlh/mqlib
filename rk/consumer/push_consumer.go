@@ -912,7 +912,7 @@ func (pc *pushConsumer) ResetOffset(topic string, table map[primitive.MessageQue
 			}
 			pq := v.(*processQueue)
 			pc.removeUnnecessaryMessageQueue(mq, pq)
-			pc.processQueueTable.Delete(mq)
+			pc.processQueueTable.Delete(*mq)
 		}
 	}
 }

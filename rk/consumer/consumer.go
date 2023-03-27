@@ -468,9 +468,10 @@ func (dc *defaultConsumer) lock(mq *primitive.MessageQueue) bool {
 		MQs:           []*primitive.MessageQueue{mq},
 	}
 	lockedMQ := dc.doLock(brokerResult.BrokerAddr, body)
+	var _mq primitive.MessageQueue
 	var lockOK bool
 	for idx := range lockedMQ {
-		_mq := lockedMQ[idx]
+		_mq = lockedMQ[idx]
 		v, exist := dc.processQueueTable.Load(_mq)
 		if exist {
 			pq := v.(*processQueue)
@@ -516,6 +517,7 @@ func (dc *defaultConsumer) unlock(mq *primitive.MessageQueue, oneway bool) {
 }
 
 func (dc *defaultConsumer) lockAll() {
+	var _mq primitive.MessageQueue
 	mqMapSet := dc.buildProcessQueueTableByBrokerName()
 	for broker, mqs := range mqMapSet {
 		if len(mqs) == 0 {
@@ -533,7 +535,7 @@ func (dc *defaultConsumer) lockAll() {
 		lockedMQ := dc.doLock(brokerResult.BrokerAddr, body)
 		set := make(map[primitive.MessageQueue]struct{})
 		for idx := range lockedMQ {
-			_mq := lockedMQ[idx]
+			_mq = lockedMQ[idx]
 			v, exist := dc.processQueueTable.Load(_mq)
 			if exist {
 				pq := v.(*processQueue)
@@ -543,8 +545,8 @@ func (dc *defaultConsumer) lockAll() {
 			set[_mq] = struct{}{}
 		}
 		for idx := range mqs {
-			_mq := mqs[idx]
-			if _, ok := set[*_mq]; !ok {
+			_mq = *mqs[idx]
+			if _, ok := set[_mq]; !ok {
 				v, exist := dc.processQueueTable.Load(_mq)
 				if exist {
 					pq := v.(*processQueue)
@@ -562,6 +564,7 @@ func (dc *defaultConsumer) lockAll() {
 }
 
 func (dc *defaultConsumer) unlockAll(oneway bool) {
+	var _mq primitive.MessageQueue
 	mqMapSet := dc.buildProcessQueueTableByBrokerName()
 	for broker, mqs := range mqMapSet {
 		if len(mqs) == 0 {
@@ -578,7 +581,7 @@ func (dc *defaultConsumer) unlockAll(oneway bool) {
 		}
 		dc.doUnlock(brokerResult.BrokerAddr, body, oneway)
 		for idx := range mqs {
-			_mq := mqs[idx]
+			_mq = *mqs[idx]
 			v, exist := dc.processQueueTable.Load(_mq)
 			if exist {
 				rlog.Info("lock MessageQueue", map[string]interface{}{
@@ -647,12 +650,7 @@ func (dc *defaultConsumer) buildProcessQueueTableByBrokerName() map[string][]*pr
 
 	dc.processQueueTable.Range(func(key, value interface{}) bool {
 		mq := key.(primitive.MessageQueue)
-		mqs, exist := result[mq.BrokerName]
-		if !exist {
-			mqs = make([]*primitive.MessageQueue, 0)
-		}
-		mqs = append(mqs, &mq)
-		result[mq.BrokerName] = mqs
+		result[mq.BrokerName] = append(result[mq.BrokerName], &mq)
 		return true
 	})
 
