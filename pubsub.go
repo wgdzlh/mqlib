@@ -5,7 +5,7 @@ import (
 
 	"github.com/wgdzlh/mqlib/log"
 
-	"github.com/wgdzlh/mqlib/rk"
+	rocketmq "github.com/wgdzlh/mqlib/rk"
 	"github.com/wgdzlh/mqlib/rk/consumer"
 	"github.com/wgdzlh/mqlib/rk/primitive"
 	"github.com/wgdzlh/mqlib/rk/producer"
@@ -47,16 +47,24 @@ func NewProducer(gpName, nsName string) (p *Producer, err error) {
 	return
 }
 
+func (p *Producer) Shutdown() {
+	p.rkp.Shutdown()
+}
+
 type Consumer struct {
 	GroupName string
 	Topics    []Topic
 	rkc       rocketmq.PushConsumer
 }
 
-func NewConsumer(gpName, nsName string, broadcast bool, topics ...Topic) (c *Consumer, err error) {
+func NewConsumer(gpName, nsName string, unitMode, broadcast bool, topics ...Topic) (c *Consumer, err error) {
 	c = &Consumer{
 		GroupName: gpName,
 		Topics:    topics,
+	}
+	unitName := ""
+	if unitMode {
+		unitName = getUnitName()
 	}
 	consumerModel := consumer.Clustering
 	if broadcast {
@@ -64,6 +72,7 @@ func NewConsumer(gpName, nsName string, broadcast bool, topics ...Topic) (c *Con
 	}
 	if c.rkc, err = rocketmq.NewPushConsumer(
 		consumer.WithNsResolver(primitive.NewPassthroughResolver([]string{nsName})),
+		consumer.WithUnitName(unitName),
 		consumer.WithGroupName(gpName),
 		consumer.WithConsumerModel(consumerModel),
 		consumer.WithConsumeFromWhere(consumer.ConsumeFromLastOffset),
@@ -94,4 +103,8 @@ func getRealCallback(sc SubCallback) realCallback {
 		}
 		return consumer.ConsumeSuccess, nil
 	}
+}
+
+func (c *Consumer) Shutdown() {
+	c.rkc.Shutdown()
 }

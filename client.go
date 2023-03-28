@@ -62,7 +62,7 @@ func NewSrvClient(nameServer, app string, subDispatcher SubDispatcher) (rsc RpcS
 		return
 	}
 	apiSubTopic := c.getSrvSubTopic(subDispatcher)
-	c.sub, err = NewConsumer(app+subGpSuffix, nameServer, false, apiSubTopic)
+	c.sub, err = NewConsumer(app+subGpSuffix, nameServer, false, false, apiSubTopic)
 	rsc = c
 	return
 }
@@ -78,7 +78,7 @@ func NewSubClient(nameServer, consumerGroup string, topics ...Topic) (sc SubClie
 		Name:       consumerGroup,
 		nameServer: nameServer,
 	}
-	c.sub, err = NewConsumer(consumerGroup, nameServer, false, topics...)
+	c.sub, err = NewConsumer(consumerGroup, nameServer, true, false, topics...)
 	return c, err
 }
 
@@ -88,7 +88,7 @@ func NewBroadcastSubClient(nameServer, consumerGroup string, topics ...Topic) (s
 		Name:       consumerGroup,
 		nameServer: nameServer,
 	}
-	c.sub, err = NewConsumer(consumerGroup, nameServer, true, topics...)
+	c.sub, err = NewConsumer(consumerGroup, nameServer, false, true, topics...)
 	return c, err
 }
 
@@ -98,7 +98,7 @@ func NewPubSubClient(nameServer, consumerGroup string, topics ...Topic) (psc Pub
 	if err != nil {
 		return
 	}
-	c.sub, err = NewConsumer(consumerGroup, nameServer, false, topics...)
+	c.sub, err = NewConsumer(consumerGroup, nameServer, true, false, topics...)
 	psc = c
 	return
 }
@@ -110,7 +110,7 @@ func NewGenericClient(nameServer, app string, subDispatcher SubDispatcher, ttl t
 		return
 	}
 	topics = append(topics, c.getSrvSubTopic(subDispatcher))
-	c.sub, err = NewConsumer(app+subGpSuffix, nameServer, false, topics...)
+	c.sub, err = NewConsumer(app+subGpSuffix, nameServer, false, false, topics...)
 	gc = c
 	return
 }
@@ -145,10 +145,10 @@ func (c *client) SetRpcTimeout(ttl time.Duration) {
 
 func (c *client) Shutdown() {
 	if c.pub != nil {
-		c.pub.rkp.Shutdown()
+		c.pub.Shutdown()
 	}
 	if c.sub != nil {
-		c.sub.rkc.Shutdown()
+		c.sub.Shutdown()
 	}
 }
 

@@ -300,3 +300,9 @@ func WithConsumeTimeout(timeout time.Duration) Option {
 		opts.ConsumeTimeout = timeout
 	}
 }
+
+func WithUnitName(unitName string) Option {
+	return func(opts *consumerOptions) {
+		opts.UnitName = unitName
+	}
+}

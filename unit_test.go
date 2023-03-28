@@ -18,7 +18,7 @@ const (
 	tag1       = "api-1"
 	queSize    = 128
 	queTimeout = time.Second * 5
-	procTime   = time.Second * 2
+	procTime   = time.Second * 1
 )
 
 var respSuffix = []byte("---response")
@@ -220,7 +220,7 @@ func TestConcurrentAsyncRPC(t *testing.T) {
 			t.Errorf("rpc failed with msg: %s, keys: %s", msg.Body, msg.Keys)
 		}
 	}
-	time.Sleep(time.Second * 11)
+	time.Sleep(time.Second * 6)
 	t.Log("all test finished")
 }
 
@@ -231,6 +231,26 @@ func TestOneLongRPC(t *testing.T) {
 		c   PubClient      // RPC客户端
 		err error
 	)
+	bc, err := NewConsumer("test-broadcast-gp", nameServer, true, true, Topic{
+		Name: pingTopic,
+		Callback: func(msg *Message) error {
+			log.Println("broadcast 1 info:", msg.ToString())
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bc2, err := NewConsumer("test-broadcast-gp", nameServer, true, true, Topic{
+		Name: pingTopic,
+		Callback: func(msg *Message) error {
+			log.Println("broadcast 2 info:", msg.ToString())
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if s.mqClient, err = NewSrvClient(nameServer, app1, s); err != nil {
 		t.Fatal(err)
 	}
@@ -239,6 +259,8 @@ func TestOneLongRPC(t *testing.T) {
 	}
 	defer c.Shutdown()
 	defer s.mqClient.Shutdown()
+	defer bc2.Shutdown()
+	defer bc.Shutdown()
 	// sync
 	msg := &Message{
 		RemoteApp: app1,
@@ -246,8 +268,8 @@ func TestOneLongRPC(t *testing.T) {
 		Keys:      []string{getRandKey()},
 		Body:      []byte("hello world 1"),
 	}
-	log.Print("rpc will finish in 100 seconds...")
-	s.msgProTime = time.Second * 100 // 临时调整处理时间到100s
+	log.Print("rpc will finish in 20 seconds...")
+	s.msgProTime = time.Second * 20 // 临时调整处理时间到20s
 	defer func() {
 		s.msgProTime = procTime
 	}()

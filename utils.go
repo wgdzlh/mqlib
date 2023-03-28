@@ -3,10 +3,14 @@ package mqlib
 import (
 	"context"
 	"encoding/base64"
+	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+var opaque int64
 
 func GetUniqKey() string {
 	uid := uuid.New()
@@ -22,4 +26,8 @@ func GetTTLFromContext(ctx context.Context) (ttl time.Duration) {
 		}
 	}
 	return
+}
+
+func getUnitName() string {
+	return strconv.FormatInt(atomic.AddInt64(&opaque, 1), 10)
 }
