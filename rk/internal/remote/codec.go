@@ -116,7 +116,7 @@ func (command *RemotingCommand) isResponseType() bool {
 }
 
 func (command *RemotingCommand) markResponseType() {
-	command.Flag = command.Flag | ResponseType
+	command.Flag |= ResponseType
 }
 
 var (
@@ -267,10 +267,10 @@ const (
 	RocketMQCodecs = byte(1)
 )
 
-type serializer interface {
-	encodeHeader(command *RemotingCommand) ([]byte, error)
-	decodeHeader(data []byte) (*RemotingCommand, error)
-}
+// type serializer interface {
+// 	encodeHeader(command *RemotingCommand) ([]byte, error)
+// 	decodeHeader(data []byte) (*RemotingCommand, error)
+// }
 
 // jsonCodec please refer to remoting/protocol/RemotingSerializable
 type jsonCodec struct{}
@@ -385,7 +385,7 @@ func (c *rmqCodec) encodeHeader(command *RemotingCommand) ([]byte, error) {
 }
 
 func (c *rmqCodec) encodeMaps(maps map[string]string) ([]byte, error) {
-	if maps == nil || len(maps) == 0 {
+	if len(maps) == 0 {
 		return []byte{}, nil
 	}
 	extFieldsBuf := bytes.NewBuffer([]byte{})

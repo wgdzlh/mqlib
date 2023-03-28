@@ -154,13 +154,10 @@ func (pc *pushConsumer) Start() error {
 		}
 
 		go func() {
-			// todo start clean msg expired
 			for {
 				select {
 				case pr := <-pc.prCh:
-					go func() {
-						pc.pullMessage(&pr)
-					}()
+					go pc.pullMessage(&pr)
 				case <-pc.done:
 					rlog.Info("push consumer close pullConsumer listener.", map[string]interface{}{
 						rlog.LogKeyConsumerGroup: pc.consumerGroup,
@@ -170,29 +167,44 @@ func (pc *pushConsumer) Start() error {
 			}
 		}()
 
-		go primitive.WithRecover(func() {
-			// initial lock.
-			if !pc.consumeOrderly {
-				return
-			}
+		if pc.consumeOrderly {
+			go primitive.WithRecover(func() {
+				// initial lock
+				time.Sleep(1000 * time.Millisecond)
+				pc.lockAll()
 
-			time.Sleep(1000 * time.Millisecond)
-			pc.lockAll()
-
-			lockTicker := time.NewTicker(pc.option.RebalanceLockInterval)
-			defer lockTicker.Stop()
-			for {
-				select {
-				case <-lockTicker.C:
-					pc.lockAll()
-				case <-pc.done:
-					rlog.Info("push consumer close tick.", map[string]interface{}{
-						rlog.LogKeyConsumerGroup: pc.consumerGroup,
-					})
-					return
+				lockTicker := time.NewTicker(pc.option.RebalanceLockInterval)
+				defer lockTicker.Stop()
+				for {
+					select {
+					case <-lockTicker.C:
+						pc.lockAll()
+					case <-pc.done:
+						rlog.Info("push consumer close tick.", map[string]interface{}{
+							rlog.LogKeyConsumerGroup: pc.consumerGroup,
+						})
+						return
+					}
 				}
-			}
-		})
+			})
+		} else {
+			go primitive.WithRecover(func() {
+				// start clean msg expired
+				ticker := time.NewTicker(pc.option.ConsumeTimeout)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-ticker.C:
+						pc.cleanExpiredMsg()
+					case <-pc.done:
+						rlog.Info("push consumer close cleanExpiredMsg listener.", map[string]interface{}{
+							rlog.LogKeyConsumerGroup: pc.consumerGroup,
+						})
+						return
+					}
+				}
+			})
+		}
 	})
 
 	if err != nil {
@@ -1290,4 +1302,12 @@ func (pc *pushConsumer) submitConsumeRequestLater(suspendTimeMillis int64) {
 		suspendTimeMillis = 30000
 	}
 	time.Sleep(time.Duration(suspendTimeMillis) * time.Millisecond)
+}
+
+func (pc *pushConsumer) cleanExpiredMsg() {
+	pc.processQueueTable.Range(func(key, value interface{}) bool {
+		pq := value.(*processQueue)
+		pq.cleanExpiredMsg(pc)
+		return true
+	})
 }
