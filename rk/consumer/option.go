@@ -300,3 +300,15 @@ func WithConsumeTimeout(timeout time.Duration) Option {
 		opts.ConsumeTimeout = timeout
 	}
 }
+
+func WithUnitName(unitName string) Option {
+	return func(opts *consumerOptions) {
+		opts.UnitName = unitName
+	}
+}
+
+func WithPostSubscriptionWhenPull(do bool) Option {
+	return func(opts *consumerOptions) {
+		opts.PostSubscriptionWhenPull = do
+	}
+}

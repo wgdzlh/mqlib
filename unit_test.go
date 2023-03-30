@@ -12,13 +12,15 @@ import (
 )
 
 const (
-	nameServer = "http://localhost:9876"
-	app1       = "mqlib-test-1"
-	app2       = "mqlib-test-2"
-	tag1       = "api-1"
-	queSize    = 128
-	queTimeout = time.Second * 5
-	procTime   = time.Second * 2
+	nameServer      = "http://localhost:9876"
+	app1            = "mqlib-test-1"
+	app2            = "mqlib-test-2"
+	reqTopicSuffix  = "-req"
+	respTopicSuffix = "-resp"
+	tag1            = "api-1"
+	queSize         = 128
+	queTimeout      = time.Second * 5
+	procTime        = time.Second * 1
 )
 
 var respSuffix = []byte("---response")
@@ -26,6 +28,7 @@ var respSuffix = []byte("---response")
 type SomeService struct {
 	msgQue     chan *Message
 	mqClient   RpcSrvClient
+	pubsub     PubSubClient
 	msgProTime time.Duration
 }
 
@@ -53,14 +56,26 @@ func (s *SomeService) startMsgLoop() {
 		go func() {
 			for msg := range s.msgQue {
 				log.Printf("ss got message: %s", msg.ToString())
+				time.Sleep(s.msgProTime)
 				switch msg.Tag {
 				case tag1:
-					time.Sleep(s.msgProTime)
+					if s.mqClient == nil {
+						continue
+					}
 					msg.Body = append(msg.Body, respSuffix...)
 					s.mqClient.Respond(msg)
 				default:
-					log.Print("unknown api tag:", msg.Tag)
-					continue
+					if s.pubsub == nil {
+						continue
+					}
+					s.pubsub.SendMessage(&Message{
+						Topic: app1 + respTopicSuffix,
+						Tag:   msg.Tag, // 返回消息体带上请求消息中的tag和keys
+						Keys:  msg.Keys,
+						Body:  append(msg.Body, respSuffix...),
+					})
+					// log.Print("unknown api tag:", msg.Tag)
+					// continue
 				}
 				log.Printf("ss finish message: %s", msg.ToString())
 			}
@@ -220,7 +235,7 @@ func TestConcurrentAsyncRPC(t *testing.T) {
 			t.Errorf("rpc failed with msg: %s, keys: %s", msg.Body, msg.Keys)
 		}
 	}
-	time.Sleep(time.Second * 11)
+	time.Sleep(time.Second * 6)
 	t.Log("all test finished")
 }
 
@@ -231,6 +246,26 @@ func TestOneLongRPC(t *testing.T) {
 		c   PubClient      // RPC客户端
 		err error
 	)
+	bc, err := NewConsumer("test-broadcast-gp", nameServer, true, Topic{
+		Name: pingTopic,
+		Callback: func(msg *Message) error {
+			log.Println("broadcast 1 info:", msg.ToString())
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bc2, err := NewConsumer("test-broadcast-gp", nameServer, true, Topic{
+		Name: pingTopic,
+		Callback: func(msg *Message) error {
+			log.Println("broadcast 2 info:", msg.ToString())
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if s.mqClient, err = NewSrvClient(nameServer, app1, s); err != nil {
 		t.Fatal(err)
 	}
@@ -239,6 +274,8 @@ func TestOneLongRPC(t *testing.T) {
 	}
 	defer c.Shutdown()
 	defer s.mqClient.Shutdown()
+	defer bc2.Shutdown()
+	defer bc.Shutdown()
 	// sync
 	msg := &Message{
 		RemoteApp: app1,
@@ -246,8 +283,8 @@ func TestOneLongRPC(t *testing.T) {
 		Keys:      []string{getRandKey()},
 		Body:      []byte("hello world 1"),
 	}
-	log.Print("rpc will finish in 100 seconds...")
-	s.msgProTime = time.Second * 100 // 临时调整处理时间到100s
+	log.Print("rpc will finish in 20 seconds...")
+	s.msgProTime = time.Second * 20 // 临时调整处理时间到20s
 	defer func() {
 		s.msgProTime = procTime
 	}()
@@ -260,5 +297,47 @@ func TestOneLongRPC(t *testing.T) {
 	} else {
 		t.Errorf("unexpected rpc response: %s", m.Body)
 	}
+	t.Log("all test finished")
+}
+
+func TestTagSub(t *testing.T) {
+	// 首先在rocketmq上新建topic：mqlib-test-1-rpc
+	var (
+		s   = newService() // RPC服务端
+		c   PubSubClient   // RPC客户端
+		err error
+	)
+	if s.pubsub, err = NewPubSubClient(nameServer, app1+"-pubsub-gp", Topic{
+		Name:     app1 + reqTopicSuffix,
+		Callback: s.ProcessMsg,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	respTopicName := app1 + respTopicSuffix
+	myTag := GetUniqKey() // 这里可以配置一个独特的初始tag，避免订阅到所有历史消息，同时标记所有发出的消息
+	initTopic := Topic{
+		Name: respTopicName,
+		Tags: []string{myTag},
+		Callback: func(msg *Message) error { // 这个函数用于处理所有响应消息，在初始化时配置，之后不可修改
+			log.Printf("client got resp: %s, body: %s", msg.ToString(), msg.Body)
+			return nil
+		},
+	}
+	if c, err = NewPubSubClient(nameServer, app2+"-pubsub-gp", initTopic); err != nil {
+		t.Fatal(err)
+	}
+	defer c.Shutdown()
+	defer s.pubsub.Shutdown()
+
+	msg := &Message{
+		Topic: app1 + reqTopicSuffix,
+		Tag:   myTag,                  // 发出的消息都带上这个全局唯一的tag
+		Keys:  []string{getRandKey()}, // 这里可以配置业务相关的key
+		Body:  []byte("hello world 1"),
+	}
+	if err = c.SendMessage(msg); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Second * 10)
 	t.Log("all test finished")
 }

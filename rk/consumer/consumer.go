@@ -253,7 +253,7 @@ type defaultConsumer struct {
 	processQueueTable sync.Map
 
 	// key: topic(string)
-	// value: map[int]*primitive.MessageQueue
+	// value: []*primitive.MessageQueue
 	topicSubscribeInfoTable sync.Map
 
 	// key: topic
@@ -426,6 +426,23 @@ func (dc *defaultConsumer) doBalance() {
 					"rebalanceResultSet":     allocateResult,
 				})
 			}
+		}
+		return true
+	})
+	dc.truncateMessageQueueNotMyTopic()
+}
+
+func (dc *defaultConsumer) truncateMessageQueueNotMyTopic() {
+	dc.processQueueTable.Range(func(key, value interface{}) bool {
+		mq := key.(primitive.MessageQueue)
+		pq := value.(*processQueue)
+		if _, ok := dc.subscriptionDataTable.Load(mq.Topic); !ok {
+			dc.removeUnnecessaryMessageQueue(&mq, pq)
+			dc.processQueueTable.Delete(key)
+			rlog.Debug("remove unnecessary mq because unsubscribed", map[string]interface{}{
+				rlog.LogKeyConsumerGroup: dc.consumerGroup,
+				rlog.LogKeyMessageQueue:  mq.String(),
+			})
 		}
 		return true
 	})
@@ -666,25 +683,21 @@ func (dc *defaultConsumer) updateProcessQueueTable(topic string, mqs []*primitiv
 		pq := value.(*processQueue)
 		if mq.Topic == topic {
 			if _, ok := mqSet[mq]; !ok {
-				pq.WithDropped(true)
-				if dc.removeUnnecessaryMessageQueue(&mq, pq) {
-					dc.processQueueTable.Delete(key)
-					changed = true
-					rlog.Debug("remove unnecessary mq when updateProcessQueueTable", map[string]interface{}{
-						rlog.LogKeyConsumerGroup: dc.consumerGroup,
-						rlog.LogKeyMessageQueue:  mq.String(),
-					})
-				}
+				dc.removeUnnecessaryMessageQueue(&mq, pq)
+				dc.processQueueTable.Delete(key)
+				changed = true
+				rlog.Debug("remove unnecessary mq when updateProcessQueueTable", map[string]interface{}{
+					rlog.LogKeyConsumerGroup: dc.consumerGroup,
+					rlog.LogKeyMessageQueue:  mq.String(),
+				})
 			} else if pq.isPullExpired() && dc.cType == _PushConsume {
-				pq.WithDropped(true)
-				if dc.removeUnnecessaryMessageQueue(&mq, pq) {
-					dc.processQueueTable.Delete(key)
-					changed = true
-					rlog.Debug("remove unnecessary mq because pull was expired, prepare to fix it", map[string]interface{}{
-						rlog.LogKeyConsumerGroup: dc.consumerGroup,
-						rlog.LogKeyMessageQueue:  mq.String(),
-					})
-				}
+				dc.removeUnnecessaryMessageQueue(&mq, pq)
+				dc.processQueueTable.Delete(key)
+				changed = true
+				rlog.Debug("remove unnecessary mq because pull was expired, prepare to fix it", map[string]interface{}{
+					rlog.LogKeyConsumerGroup: dc.consumerGroup,
+					rlog.LogKeyMessageQueue:  mq.String(),
+				})
 			}
 		}
 		return true
@@ -743,10 +756,10 @@ func (dc *defaultConsumer) updateProcessQueueTable(topic string, mqs []*primitiv
 	return changed
 }
 
-func (dc *defaultConsumer) removeUnnecessaryMessageQueue(mq *primitive.MessageQueue, pq *processQueue) bool {
+func (dc *defaultConsumer) removeUnnecessaryMessageQueue(mq *primitive.MessageQueue, pq *processQueue) {
+	pq.WithDropped(true)
 	dc.storage.persist([]*primitive.MessageQueue{mq})
 	dc.storage.remove(mq)
-	return true
 }
 
 // Deprecated: Use computePullFromWhereWithException instead.
@@ -857,7 +870,7 @@ func (dc *defaultConsumer) pullInner(ctx context.Context, queue *primitive.Messa
 		SuspendTimeout: _BrokerSuspendMaxTime,
 		SubExpression:  data.SubString,
 		// TODO: add subversion
-		ExpressionType: string(data.ExpType),
+		ExpressionType: data.ExpType,
 	}
 
 	if data.ExpType == string(TAG) {
@@ -877,13 +890,12 @@ func (dc *defaultConsumer) processPullResult(mq *primitive.MessageQueue, result 
 
 	switch result.Status {
 	case primitive.PullFound:
-		result.SetMessageExts(primitive.DecodeMessage(result.GetBody()))
-		msgs := result.GetMessageExts()
+		msgs := primitive.DecodeMessage(result.GetBody())
 
 		// filter message according to tags
 		msgListFilterAgain := msgs
-		if data.Tags.Len() > 0 && data.ClassFilterMode {
-			msgListFilterAgain = make([]*primitive.MessageExt, 0)
+		if data.Tags.Len() > 0 && !data.ClassFilterMode {
+			msgListFilterAgain = make([]*primitive.MessageExt, 0, len(msgs))
 			for _, msg := range msgs {
 				_, exist := data.Tags.Contains(msg.GetTags())
 				if exist {

@@ -137,6 +137,14 @@ func newClient(nameServer, app string, ttl ...time.Duration) (c *client, err err
 	return
 }
 
+func (c *client) GetPub() *Producer {
+	return c.pub
+}
+
+func (c *client) GetSub() *Consumer {
+	return c.sub
+}
+
 func (c *client) SetRpcTimeout(ttl time.Duration) {
 	if ttl > 0 {
 		c.rpcTTL = ttl
@@ -145,17 +153,16 @@ func (c *client) SetRpcTimeout(ttl time.Duration) {
 
 func (c *client) Shutdown() {
 	if c.pub != nil {
-		c.pub.rkp.Shutdown()
+		c.pub.Shutdown()
 	}
 	if c.sub != nil {
-		c.sub.rkc.Shutdown()
+		c.sub.Shutdown()
 	}
 }
 
 func (c *client) getSrvSubTopic(dispatcher SubDispatcher) Topic {
 	return Topic{
 		Name:     c.Name + rpcTopicSuffix,
-		Filter:   consumer.MessageSelector{},
 		Callback: dispatcher.ProcessMsg,
 	}
 }

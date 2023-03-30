@@ -18,6 +18,7 @@ type baseClient interface {
 
 type PubClient interface {
 	baseClient
+	GetPub() *Producer
 	SetRpcTimeout(ttl time.Duration)
 	SendMessage(msg *Message) error
 	Request(msg *Message, ctx ...context.Context) (resp *Message, err error)
@@ -27,6 +28,7 @@ type PubClient interface {
 
 type SubClient interface {
 	baseClient
+	GetSub() *Consumer
 }
 
 type RpcSrvClient interface {

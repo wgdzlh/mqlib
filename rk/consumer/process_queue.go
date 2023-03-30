@@ -95,7 +95,7 @@ func (pq *processQueue) putMessage(messages ...*primitive.MessageExt) {
 		return
 	}
 	pq.mutex.Lock()
-	if pq.IsDroppd() {
+	if pq.IsDropped() {
 		pq.mutex.Unlock()
 		return
 	}
@@ -151,12 +151,14 @@ func (pq *processQueue) IsLock() bool {
 
 func (pq *processQueue) WithDropped(dropped bool) {
 	pq.dropped.Store(dropped)
-	pq.closeChanOnce.Do(func() {
-		close(pq.closeChan)
-	})
+	if dropped {
+		pq.closeChanOnce.Do(func() {
+			close(pq.closeChan)
+		})
+	}
 }
 
-func (pq *processQueue) IsDroppd() bool {
+func (pq *processQueue) IsDropped() bool {
 	return pq.dropped.Load()
 }
 
