@@ -28,7 +28,7 @@ type realCallback = func(context.Context, ...*primitive.MessageExt) (consumer.Co
 
 type Topic struct {
 	Name     string      // 订阅的topic名称
-	Tags     []string    // 订阅的topic下的tag列表，可留空（表示订阅所有tag），订阅后仍可以修改（通过Consumer.AddTagsToSubbedTopic函数），但响应消息有被过滤风险
+	Tags     []string    // 订阅的topic下的tag列表，可留空（表示订阅所有tag），订阅后不可修改
 	Callback SubCallback // 订阅的topic+tag收到消息时的回调，在第一次订阅topic时指定，订阅后不可修改
 }
 
@@ -90,7 +90,7 @@ func NewConsumer(gpName, nsName string, broadcast bool, topics ...Topic) (c *Con
 		consumer.WithGroupName(gpName),
 		consumer.WithConsumerModel(consumerModel),
 		consumer.WithConsumeFromWhere(consumer.ConsumeFromLastOffset),
-		consumer.WithPostSubscriptionWhenPull(!broadcast),
+		// consumer.WithPostSubscriptionWhenPull(!broadcast), 暂时不开启修改订阅的功能
 		consumer.WithRetry(DEFAULT_RETRY),
 	); err != nil {
 		log.Error("init rocketmq consumer failed", zap.Error(err))
@@ -168,6 +168,14 @@ func (c *Consumer) subscribe(topics ...Topic) (err error) {
 	return
 }
 
+func (c *Consumer) UnsubscribeTopic(topic string) error {
+	c.Lock()
+	delete(c.subMap, topic)
+	c.Unlock()
+	return c.rkc.Unsubscribe(topic)
+}
+
+/*
 // 给已订阅的topic修改tag，这里注意如果对应的响应消息很快就发出来的话（在默认的长轮询20s时间间隔以内），
 // 该消息可能会被过滤掉，导致接收不到
 func (c *Consumer) AddTagsToSubbedTopic(topic string, tags ...string) error {
@@ -178,13 +186,6 @@ func (c *Consumer) AddTagsToSubbedTopic(topic string, tags ...string) error {
 		Name: topic,
 		Tags: tags,
 	})
-}
-
-func (c *Consumer) UnsubscribeTopic(topic string) error {
-	c.Lock()
-	delete(c.subMap, topic)
-	c.Unlock()
-	return c.rkc.Unsubscribe(topic)
 }
 
 func (c *Consumer) UnsubscribeTags(topic string, tags ...string) (err error) {
@@ -222,6 +223,7 @@ func (c *Consumer) SubscribeAllTags(topic string) error {
 	}
 	return c.UnsubscribeTags(topic, sub.getTags()...)
 }
+*/
 
 func (s *subData) getTags() []string {
 	s.RLock()
