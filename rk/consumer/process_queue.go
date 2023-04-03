@@ -94,19 +94,11 @@ func (pq *processQueue) putMessage(messages ...*primitive.MessageExt) {
 	if len(messages) == 0 {
 		return
 	}
-	pq.mutex.Lock()
 	if pq.IsDropped() {
-		pq.mutex.Unlock()
 		return
 	}
-	if !pq.order {
-		select {
-		case <-pq.closeChan:
-			return
-		case pq.msgCh <- messages:
-		}
-	}
 	validMessageCount := 0
+	pq.mutex.Lock()
 	for idx := range messages {
 		msg := messages[idx]
 		_, found := pq.msgCache.Get(msg.QueueOffset)
@@ -127,6 +119,13 @@ func (pq *processQueue) putMessage(messages ...*primitive.MessageExt) {
 	pq.cachedMsgCount.Add(int64(validMessageCount))
 	pq.mutex.Unlock()
 
+	if !pq.order {
+		select {
+		case <-pq.closeChan:
+			return
+		case pq.msgCh <- messages:
+		}
+	}
 	if pq.cachedMsgCount.Load() > 0 && !pq.consuming {
 		pq.consuming = true
 	}
