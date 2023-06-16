@@ -96,7 +96,7 @@ func NewConsumer(gpName, nsName string, broadcast bool, topics ...Topic) (c *Con
 		log.Error("init rocketmq consumer failed", zap.Error(err))
 		return
 	}
-	if err = c.subscribe(topics...); err != nil {
+	if err = c.subscribe(topics); err != nil {
 		log.Error("subscribe failed", zap.Error(err))
 		return
 	}
@@ -123,7 +123,7 @@ func (c *Consumer) Shutdown() {
 	c.rkc.Shutdown()
 }
 
-func (c *Consumer) subscribe(topics ...Topic) (err error) {
+func (c *Consumer) subscribe(topics []Topic) (err error) {
 	c.Lock()
 	defer c.Unlock()
 	for _, topic := range topics {

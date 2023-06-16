@@ -301,7 +301,7 @@ func TestOneLongRPC(t *testing.T) {
 }
 
 func TestTagSub(t *testing.T) {
-	// 首先在rocketmq上新建topic：mqlib-test-1-rpc
+	// 首先在rocketmq上新建topic：mqlib-test-1-req, mqlib-test-1-resp
 	var (
 		s   = newService() // RPC服务端
 		c   PubSubClient   // RPC客户端
