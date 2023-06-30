@@ -341,3 +341,7 @@ func TestTagSub(t *testing.T) {
 	time.Sleep(time.Second * 10)
 	t.Log("all test finished")
 }
+
+func TestCreateTopic(t *testing.T) {
+	t.Log(CreateTopic(nameServer, "test_topic"))
+}
