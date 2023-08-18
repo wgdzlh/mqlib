@@ -65,7 +65,7 @@ func (s *SomeService) startMsgLoop() {
 					msg.Body = append(msg.Body, respSuffix...)
 					s.mqClient.Respond(msg)
 				default:
-					if s.pubsub == nil {
+					if s.pubsub == nil || msg.Tag == "" {
 						continue
 					}
 					s.pubsub.SendMessage(&Message{

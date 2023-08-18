@@ -5,7 +5,9 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/patrickmn/go-cache"
 	"github.com/wgdzlh/mqlib/log"
 	rocketmq "github.com/wgdzlh/mqlib/rk"
 	"github.com/wgdzlh/mqlib/rk/consumer"
@@ -18,6 +20,8 @@ import (
 const (
 	DEFAULT_RETRY = 3
 	tagSep        = "||"
+
+	MSG_IDS_CACHE_EX = time.Hour * 2
 )
 
 var (
@@ -70,6 +74,7 @@ type Consumer struct {
 	GroupName string
 	subMap    map[string]*subData
 	rkc       rocketmq.PushConsumer
+	msgIds    *cache.Cache
 	started   bool
 }
 
@@ -77,6 +82,7 @@ func NewConsumer(gpName, nsName string, broadcast bool, topics ...Topic) (c *Con
 	c = &Consumer{
 		GroupName: gpName,
 		subMap:    map[string]*subData{},
+		msgIds:    cache.New(MSG_IDS_CACHE_EX, MSG_IDS_CACHE_EX*2),
 	}
 	consumerModel := consumer.Clustering
 	unitName := ""
@@ -118,13 +124,18 @@ func NewConsumer(gpName, nsName string, broadcast bool, topics ...Topic) (c *Con
 	return
 }
 
-func getRealCallback(sc SubCallback) realCallback {
+func (c *Consumer) getRealCallback(sc SubCallback) realCallback {
 	return func(ctx context.Context, me ...*primitive.MessageExt) (ret consumer.ConsumeResult, err error) {
+		var exist bool
 		for _, m := range me {
+			if _, exist = c.msgIds.Get(m.MsgId); exist {
+				continue
+			}
 			if err = sc(msgFromRkMsgExt(m)); err != nil {
 				ret = consumer.ConsumeRetryLater
 				return
 			}
+			c.msgIds.SetDefault(m.MsgId, struct{}{})
 		}
 		return consumer.ConsumeSuccess, nil
 	}
@@ -171,7 +182,7 @@ func (c *Consumer) subscribe(topics []Topic) (err error) {
 			if err = c.rkc.Subscribe(topic.Name, consumer.MessageSelector{
 				Type:       consumer.TAG,
 				Expression: tagList,
-			}, getRealCallback(sub.topic.Callback)); err != nil {
+			}, c.getRealCallback(sub.topic.Callback)); err != nil {
 				return
 			}
 		}
