@@ -113,7 +113,6 @@ func NewConsumer(gpName, nsName string, broadcast bool, topics ...Topic) (c *Con
 				topicNames[i] = topics[i].Name
 			}
 			if CreateTopic(nsName, topicNames...) == nil {
-				time.Sleep(time.Millisecond * 200)
 				err = c.rkc.Start()
 			}
 		}

@@ -11,18 +11,16 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/sirupsen/logrus v1.4.0
 	github.com/smartystreets/goconvey v1.7.2
-	github.com/stathat/consistent v1.0.0
 	github.com/stretchr/testify v1.8.0
 	github.com/tidwall/gjson v1.13.0
 	go.uber.org/atomic v1.7.0
 	go.uber.org/zap v1.23.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
+	stathat.com/c/consistent v1.0.0
 )
 
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
-	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	stathat.com/c/consistent v1.0.0 // indirect
 )
