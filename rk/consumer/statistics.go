@@ -29,7 +29,7 @@ import (
 )
 
 type StatsManager struct {
-	// startOnce                     sync.Once
+	startOnce                     sync.Once
 	closeOnce                     sync.Once
 	topicAndGroupConsumeOKTPS     *statsItemSet
 	topicAndGroupConsumeRT        *statsItemSet
@@ -211,7 +211,7 @@ func (sis *statsItemSet) init() {
 	})
 
 	go primitive.WithRecover(func() {
-		time.Sleep(time.Until(nextMinutesTime()))
+		time.Sleep(nextMinutesTime().Sub(time.Now()))
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
 		for {
@@ -225,7 +225,7 @@ func (sis *statsItemSet) init() {
 	})
 
 	go primitive.WithRecover(func() {
-		time.Sleep(time.Until(nextHourTime()))
+		time.Sleep(nextHourTime().Sub(time.Now()))
 		ticker := time.NewTicker(time.Hour)
 		defer ticker.Stop()
 		for {
@@ -239,7 +239,7 @@ func (sis *statsItemSet) init() {
 	})
 
 	go primitive.WithRecover(func() {
-		time.Sleep(time.Until(nextMonthTime()))
+		time.Sleep(nextMonthTime().Sub(time.Now()))
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 		for {
@@ -333,18 +333,18 @@ func (sis *statsItemSet) getStatsDataInHour(key string) statsSnapshot {
 	return statsSnapshot{}
 }
 
-// func (sis *statsItemSet) getStatsDataInDay(key string) statsSnapshot {
-// 	if val, ok := sis.statsItemTable.Load(key); ok {
-// 		si := val.(*statsItem)
-// 		return si.getStatsDataInDay()
-// 	}
-// 	return statsSnapshot{}
-// }
+func (sis *statsItemSet) getStatsDataInDay(key string) statsSnapshot {
+	if val, ok := sis.statsItemTable.Load(key); ok {
+		si := val.(*statsItem)
+		return si.getStatsDataInDay()
+	}
+	return statsSnapshot{}
+}
 
-// func (sis *statsItemSet) getStatsItem(key string) *statsItem {
-// 	val, _ := sis.statsItemTable.Load(key)
-// 	return val.(*statsItem)
-// }
+func (sis *statsItemSet) getStatsItem(key string) *statsItem {
+	val, _ := sis.statsItemTable.Load(key)
+	return val.(*statsItem)
+}
 
 type statsItem struct {
 	value            int64
@@ -367,9 +367,9 @@ func (si *statsItem) getStatsDataInHour() statsSnapshot {
 	return computeStatsData(&si.csListHourLock, si.csListHour)
 }
 
-// func (si *statsItem) getStatsDataInDay() statsSnapshot {
-// 	return computeStatsData(&si.csListDayLock, si.csListDay)
-// }
+func (si *statsItem) getStatsDataInDay() statsSnapshot {
+	return computeStatsData(&si.csListDayLock, si.csListDay)
+}
 
 func newStatsItem(statsName, statsKey string) *statsItem {
 	return &statsItem{
@@ -422,7 +422,7 @@ func (si *statsItem) samplingInHour() {
 
 func (si *statsItem) printAtMinutes() {
 	ss := computeStatsData(&si.csListMinuteLock, si.csListMinute)
-	rlog.Info("Stats In One Minute, SUM: %d TPS:  AVGPT: %.2f", map[string]interface{}{
+	rlog.Info("Stats In One Minute.", map[string]interface{}{
 		"statsName": si.statsName,
 		"statsKey":  si.statsKey,
 		"SUM":       ss.sum,
@@ -433,7 +433,7 @@ func (si *statsItem) printAtMinutes() {
 
 func (si *statsItem) printAtHour() {
 	ss := computeStatsData(&si.csListHourLock, si.csListHour)
-	rlog.Info("Stats In One Hour, SUM: %d TPS:  AVGPT: %.2f", map[string]interface{}{
+	rlog.Info("Stats In One Hour.", map[string]interface{}{
 		"statsName": si.statsName,
 		"statsKey":  si.statsKey,
 		"SUM":       ss.sum,
@@ -444,7 +444,7 @@ func (si *statsItem) printAtHour() {
 
 func (si *statsItem) printAtDay() {
 	ss := computeStatsData(&si.csListDayLock, si.csListDay)
-	rlog.Info("Stats In One Day, SUM: %d TPS:  AVGPT: %.2f", map[string]interface{}{
+	rlog.Info("Stats In One Day.", map[string]interface{}{
 		"statsName": si.statsName,
 		"statsKey":  si.statsKey,
 		"SUM":       ss.sum,

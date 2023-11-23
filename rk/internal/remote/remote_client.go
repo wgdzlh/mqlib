@@ -40,7 +40,7 @@ type TcpOption struct {
 	WriteTimeout      time.Duration
 }
 
-//go:generate mockgen -source remote_client.go -destination mock_remote_client.go -self_package github.com/wgdzlh/mqlib/rk/internal/remote  --package remote RemotingClient
+//go:generate mockgen -source remote_client.go -destination mock_remote_client.go -self_package github.com/apache/rocketmq-client-go/v2/internal/remote  --package remote RemotingClient
 type RemotingClient interface {
 	RegisterRequestFunc(code int16, f ClientRequestFunc)
 	RegisterInterceptor(interceptors ...primitive.Interceptor)
@@ -239,12 +239,12 @@ func (c *remotingClient) processCMD(cmd *RemotingCommand, r *tcpConnWrapper) {
 		f := c.processors[cmd.Code]
 		if f != nil {
 			// single goroutine will be deadlock
-			// TODO: optimize with goroutine pool, https://github.com/apache/rocketmq-client-go/issues/307
+			// TODO: optimize with goroutine pool, https://github.com/apache/rocketmq-client-go/v2/issues/307
 			go primitive.WithRecover(func() {
 				res := f(cmd, r.RemoteAddr())
 				if res != nil {
 					res.Opaque = cmd.Opaque
-					res.markResponseType()
+					res.Flag |= 1 << 0
 					err := c.sendRequest(r, res)
 					if err != nil {
 						rlog.Warning("send response to broker error", map[string]interface{}{

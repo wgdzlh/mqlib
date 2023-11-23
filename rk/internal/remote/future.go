@@ -19,8 +19,9 @@ package remote
 
 import (
 	"context"
-	"github.com/wgdzlh/mqlib/rk/errors"
 	"sync"
+
+	"github.com/wgdzlh/mqlib/rk/errors"
 )
 
 // ResponseFuture

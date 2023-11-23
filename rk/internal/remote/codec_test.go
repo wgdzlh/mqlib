@@ -18,11 +18,12 @@ package remote
 
 import (
 	"encoding/json"
-	"github.com/wgdzlh/mqlib/rk/rlog"
 	"math/rand"
 	"reflect"
 	"testing"
 	"unsafe"
+
+	"github.com/wgdzlh/mqlib/rk/rlog"
 
 	jsoniter "github.com/json-iterator/go"
 

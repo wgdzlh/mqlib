@@ -25,8 +25,9 @@ import (
 	"strconv"
 	"strings"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/tidwall/gjson"
+
+	jsoniter "github.com/json-iterator/go"
 	"github.com/wgdzlh/mqlib/rk/internal/utils"
 	"github.com/wgdzlh/mqlib/rk/primitive"
 	"github.com/wgdzlh/mqlib/rk/rlog"
@@ -60,6 +61,32 @@ type SubscriptionData struct {
 	Codes           utils.Set `json:"codeSet"`
 	SubVersion      int64     `json:"subVersion"`
 	ExpType         string    `json:"expressionType"`
+}
+
+func (sd *SubscriptionData) Clone() *SubscriptionData {
+	cloned := &SubscriptionData{
+		ClassFilterMode: sd.ClassFilterMode,
+		Topic:           sd.Topic,
+		SubString:       sd.SubString,
+		SubVersion:      sd.SubVersion,
+		ExpType:         sd.ExpType,
+	}
+
+	if sd.Tags.Items() != nil {
+		cloned.Tags = utils.NewSet()
+		for key, value := range sd.Tags.Items() {
+			cloned.Tags.AddKV(key, value.UniqueID())
+		}
+	}
+
+	if sd.Codes.Items() != nil {
+		cloned.Codes = utils.NewSet()
+		for key, value := range sd.Codes.Items() {
+			cloned.Codes.AddKV(key, value.UniqueID())
+		}
+	}
+
+	return cloned
 }
 
 type producerData struct {
@@ -146,7 +173,7 @@ type ConsumeStatus struct {
 
 type ConsumerRunningInfo struct {
 	Properties       map[string]string
-	SubscriptionData map[*SubscriptionData]struct{}
+	SubscriptionData map[*SubscriptionData]bool
 	MQTable          map[primitive.MessageQueue]ProcessQueueInfo
 	StatusTable      map[string]ConsumeStatus
 	JStack           string // just follow java request param name, but pass golang stack here.
@@ -177,7 +204,7 @@ func (info ConsumerRunningInfo) Encode() ([]byte, error) {
 		sub1 := subs[i]
 		sub2 := subs[j]
 		if sub1.ClassFilterMode != sub2.ClassFilterMode {
-			return !sub1.ClassFilterMode
+			return sub1.ClassFilterMode == false
 		}
 		com := strings.Compare(sub1.Topic, sub1.Topic)
 		if com != 0 {
@@ -248,8 +275,8 @@ func (info ConsumerRunningInfo) Encode() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		dataV, _ := json.Marshal(info.MQTable[keys[idx]])
-		tableJson = fmt.Sprintf("%s,%s:%s", tableJson, string(dataK), dataV)
+		dataV, err := json.Marshal(info.MQTable[keys[idx]])
+		tableJson = fmt.Sprintf("%s,%s:%s", tableJson, string(dataK), string(dataV))
 	}
 	tableJson = strings.TrimLeft(tableJson, ",")
 
@@ -263,9 +290,57 @@ func (info ConsumerRunningInfo) Encode() ([]byte, error) {
 func NewConsumerRunningInfo() *ConsumerRunningInfo {
 	return &ConsumerRunningInfo{
 		Properties:       make(map[string]string),
-		SubscriptionData: make(map[*SubscriptionData]struct{}),
+		SubscriptionData: make(map[*SubscriptionData]bool),
 		MQTable:          make(map[primitive.MessageQueue]ProcessQueueInfo),
 		StatusTable:      make(map[string]ConsumeStatus),
+	}
+}
+
+type ConsumerStatus struct {
+	MQOffsetMap map[primitive.MessageQueue]int64
+}
+
+func (status ConsumerStatus) Encode() ([]byte, error) {
+	mapJson := ""
+	keys := make([]primitive.MessageQueue, 0)
+
+	for k := range status.MQOffsetMap {
+		keys = append(keys, k)
+	}
+
+	sort.Slice(keys, func(i, j int) bool {
+		q1 := keys[i]
+		q2 := keys[j]
+		com := strings.Compare(q1.Topic, q2.Topic)
+		if com != 0 {
+			return com < 0
+		}
+
+		com = strings.Compare(q1.BrokerName, q2.BrokerName)
+		if com != 0 {
+			return com < 0
+		}
+
+		return q1.QueueId < q2.QueueId
+	})
+
+	for idx := range keys {
+		dataK, err := json.Marshal(keys[idx])
+		if err != nil {
+			return nil, err
+		}
+		dataV, err := json.Marshal(status.MQOffsetMap[keys[idx]])
+		mapJson = fmt.Sprintf("%s,%s:%s", mapJson, string(dataK), string(dataV))
+	}
+	mapJson = strings.TrimLeft(mapJson, ",")
+	jsonData := fmt.Sprintf("{\"%s\":%s}",
+		"messageQueueTable", fmt.Sprintf("{%s}", mapJson))
+	return []byte(jsonData), nil
+}
+
+func NewConsumerStatus() *ConsumerStatus {
+	return &ConsumerStatus{
+		MQOffsetMap: make(map[primitive.MessageQueue]int64),
 	}
 }
 
@@ -393,7 +468,7 @@ func parseFastJsonFormat(body []byte) map[primitive.MessageQueue]int64 {
 
 		var err error
 		// ignore err for now
-		offset, _ := strconv.Atoi(tuple[1])
+		offset, err := strconv.Atoi(tuple[1])
 
 		var queue primitive.MessageQueue
 		err = json.Unmarshal([]byte(queueStr), &queue)

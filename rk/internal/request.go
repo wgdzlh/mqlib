@@ -18,6 +18,7 @@ limitations under the License.
 package internal
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 )
@@ -44,10 +45,12 @@ const (
 	ReqSendBatchMessage              = int16(320)
 	ReqCheckTransactionState         = int16(39)
 	ReqNotifyConsumerIdsChanged      = int16(40)
+	ReqGetAllSubscriptionGroupConfig = int16(201)
 	ReqGetAllTopicListFromNameServer = int16(206)
 	ReqDeleteTopicInBroker           = int16(215)
 	ReqDeleteTopicInNameSrv          = int16(216)
 	ReqResetConsumerOffset           = int16(220)
+	ReqGetConsumerStatsFromClient    = int16(221)
 	ReqGetConsumerRunningInfo        = int16(307)
 	ReqConsumeMessageDirectly        = int16(309)
 	ReqSendReplyMessage              = int16(324)
@@ -76,9 +79,9 @@ func (request *SendMessageRequestHeader) Encode() map[string]string {
 	maps["producerGroup"] = request.ProducerGroup
 	maps["topic"] = request.Topic
 	maps["queueId"] = strconv.Itoa(request.QueueId)
-	maps["sysFlag"] = strconv.Itoa(request.SysFlag)
+	maps["sysFlag"] = fmt.Sprintf("%d", request.SysFlag)
 	maps["bornTimestamp"] = strconv.FormatInt(request.BornTimestamp, 10)
-	maps["flag"] = strconv.FormatInt(int64(request.Flag), 10)
+	maps["flag"] = fmt.Sprintf("%d", request.Flag)
 	maps["reconsumeTimes"] = strconv.Itoa(request.ReconsumeTimes)
 	maps["unitMode"] = strconv.FormatBool(request.UnitMode)
 	maps["maxReconsumeTimes"] = strconv.Itoa(request.MaxReconsumeTimes)
@@ -111,9 +114,9 @@ func (request *SendMessageRequestV2Header) Encode() map[string]string {
 	maps["c"] = request.DefaultTopic
 	maps["d"] = strconv.Itoa(request.DefaultTopicQueueNums)
 	maps["e"] = strconv.Itoa(request.QueueId)
-	maps["f"] = strconv.Itoa(request.SysFlag)
+	maps["f"] = fmt.Sprintf("%d", request.SysFlag)
 	maps["g"] = strconv.FormatInt(request.BornTimestamp, 10)
-	maps["h"] = strconv.FormatInt(int64(request.Flag), 10)
+	maps["h"] = fmt.Sprintf("%d", request.Flag)
 	maps["i"] = request.Properties
 	maps["j"] = strconv.Itoa(request.ReconsumeTimes)
 	maps["k"] = strconv.FormatBool(request.UnitMode)
@@ -198,31 +201,31 @@ func (request *ConsumerSendMsgBackRequestHeader) Encode() map[string]string {
 }
 
 type PullMessageRequestHeader struct {
-	ConsumerGroup  string
-	Topic          string
-	QueueId        int32
-	QueueOffset    int64
-	MaxMsgNums     int32
-	SysFlag        int32
-	CommitOffset   int64
-	SuspendTimeout time.Duration
-	SubExpression  string
-	SubVersion     int64
-	ExpressionType string
+	ConsumerGroup        string
+	Topic                string
+	QueueId              int32
+	QueueOffset          int64
+	MaxMsgNums           int32
+	SysFlag              int32
+	CommitOffset         int64
+	SuspendTimeoutMillis time.Duration
+	SubExpression        string
+	SubVersion           int64
+	ExpressionType       string
 }
 
 func (request *PullMessageRequestHeader) Encode() map[string]string {
 	maps := make(map[string]string)
 	maps["consumerGroup"] = request.ConsumerGroup
 	maps["topic"] = request.Topic
-	maps["queueId"] = strconv.FormatInt(int64(request.QueueId), 10)
-	maps["queueOffset"] = strconv.FormatInt(request.QueueOffset, 10)
-	maps["maxMsgNums"] = strconv.FormatInt(int64(request.MaxMsgNums), 10)
-	maps["sysFlag"] = strconv.FormatInt(int64(request.SysFlag), 10)
-	maps["commitOffset"] = strconv.FormatInt(request.CommitOffset, 10)
-	maps["suspendTimeoutMillis"] = strconv.FormatInt(int64(request.SuspendTimeout/time.Millisecond), 10)
+	maps["queueId"] = fmt.Sprintf("%d", request.QueueId)
+	maps["queueOffset"] = fmt.Sprintf("%d", request.QueueOffset)
+	maps["maxMsgNums"] = fmt.Sprintf("%d", request.MaxMsgNums)
+	maps["sysFlag"] = fmt.Sprintf("%d", request.SysFlag)
+	maps["commitOffset"] = fmt.Sprintf("%d", request.CommitOffset)
+	maps["suspendTimeoutMillis"] = fmt.Sprintf("%d", request.SuspendTimeoutMillis/time.Millisecond)
 	maps["subscription"] = request.SubExpression
-	maps["subVersion"] = strconv.FormatInt(request.SubVersion, 10)
+	maps["subVersion"] = fmt.Sprintf("%d", request.SubVersion)
 	maps["expressionType"] = request.ExpressionType
 
 	return maps
@@ -348,9 +351,9 @@ func (request *QueryMessageRequestHeader) Encode() map[string]string {
 	maps := make(map[string]string)
 	maps["topic"] = request.Topic
 	maps["key"] = request.Key
-	maps["maxNum"] = strconv.Itoa(request.MaxNum)
+	maps["maxNum"] = fmt.Sprintf("%d", request.MaxNum)
 	maps["beginTimestamp"] = strconv.FormatInt(request.BeginTimestamp, 10)
-	maps["endTimestamp"] = strconv.FormatInt(request.EndTimestamp, 10)
+	maps["endTimestamp"] = fmt.Sprintf("%d", request.EndTimestamp)
 
 	return maps
 }
@@ -385,11 +388,11 @@ func (request *CreateTopicRequestHeader) Encode() map[string]string {
 	maps := make(map[string]string)
 	maps["topic"] = request.Topic
 	maps["defaultTopic"] = request.DefaultTopic
-	maps["readQueueNums"] = strconv.Itoa(request.ReadQueueNums)
-	maps["writeQueueNums"] = strconv.Itoa(request.WriteQueueNums)
-	maps["perm"] = strconv.Itoa(request.Perm)
+	maps["readQueueNums"] = fmt.Sprintf("%d", request.ReadQueueNums)
+	maps["writeQueueNums"] = fmt.Sprintf("%d", request.WriteQueueNums)
+	maps["perm"] = fmt.Sprintf("%d", request.Perm)
 	maps["topicFilterType"] = request.TopicFilterType
-	maps["topicSysFlag"] = strconv.Itoa(request.TopicSysFlag)
+	maps["topicSysFlag"] = fmt.Sprintf("%d", request.TopicSysFlag)
 	maps["order"] = strconv.FormatBool(request.Order)
 
 	return maps
@@ -421,7 +424,7 @@ type ResetOffsetHeader struct {
 	topic     string
 	group     string
 	timestamp int64
-	// isForce   bool
+	isForce   bool
 }
 
 func (request *ResetOffsetHeader) Encode() map[string]string {
@@ -488,6 +491,38 @@ func (request *ConsumeMessageDirectlyHeader) Decode(properties map[string]string
 	}
 }
 
+type GetConsumerStatusRequestHeader struct {
+	topic      string
+	group      string
+	clientAddr string
+}
+
+func (request *GetConsumerStatusRequestHeader) Encode() map[string]string {
+	return map[string]string{
+		"topic":      request.topic,
+		"group":      request.group,
+		"clientAddr": request.clientAddr,
+	}
+}
+
+func (request *GetConsumerStatusRequestHeader) Decode(properties map[string]string) {
+	if len(properties) == 0 {
+		return
+	}
+
+	if v, existed := properties["topic"]; existed {
+		request.topic = v
+	}
+
+	if v, existed := properties["group"]; existed {
+		request.group = v
+	}
+
+	if v, existed := properties["clientAddr"]; existed {
+		request.clientAddr = v
+	}
+}
+
 type ReplyMessageRequestHeader struct {
 	producerGroup         string
 	topic                 string
@@ -499,10 +534,10 @@ type ReplyMessageRequestHeader struct {
 	flag                  int32
 	properties            string
 	reconsumeTimes        int32
+	unitMode              bool
 	bornHost              string
 	storeHost             string
 	storeTimestamp        int64
-	// unitMode              bool
 }
 
 func (request *ReplyMessageRequestHeader) Encode() map[string]string {
@@ -514,9 +549,9 @@ func (request *ReplyMessageRequestHeader) Encode() map[string]string {
 		"queueId":               strconv.Itoa(request.queueId),
 		"sysFlag":               strconv.Itoa(request.sysFlag),
 		"bornTimestamp":         strconv.FormatInt(request.bornTimestamp, 10),
-		"flag":                  strconv.FormatInt(int64(request.flag), 10),
+		"flag":                  fmt.Sprintf("%d", request.flag),
 		"properties":            request.properties,
-		"reconsumeTimes":        strconv.FormatInt(int64(request.reconsumeTimes), 10),
+		"reconsumeTimes":        fmt.Sprintf("%d", request.reconsumeTimes),
 		"bornHost":              request.bornHost,
 		"storeHost":             request.storeHost,
 		"storeTimestamp":        strconv.FormatInt(request.storeTimestamp, 10),

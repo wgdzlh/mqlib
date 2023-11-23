@@ -23,12 +23,15 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/wgdzlh/mqlib/rk/errors"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tidwall/gjson"
 
-	"github.com/wgdzlh/mqlib/rk/errors"
 	"github.com/wgdzlh/mqlib/rk/internal/remote"
 	"github.com/wgdzlh/mqlib/rk/internal/utils"
 	"github.com/wgdzlh/mqlib/rk/primitive"
@@ -38,7 +41,7 @@ import (
 const (
 	EnvNameServerAddr = "NAMESRV_ADDR"
 
-	requestTimeout   = 3 * time.Second
+	requestTimeout   = 6 * time.Second
 	defaultTopic     = "TBW102"
 	defaultQueueNums = 4
 	MasterId         = int64(0)
@@ -93,18 +96,18 @@ type TopicPublishInfo struct {
 	TopicQueueIndex     int32
 }
 
-// func (info *TopicPublishInfo) isOK() (bIsTopicOk bool) {
-// 	return len(info.MqList) > 0
-// }
+func (info *TopicPublishInfo) isOK() (bIsTopicOk bool) {
+	return len(info.MqList) > 0
+}
 
-// func (info *TopicPublishInfo) fetchQueueIndex() int {
-// 	length := len(info.MqList)
-// 	if length <= 0 {
-// 		return -1
-// 	}
-// 	qIndex := atomic.AddInt32(&info.TopicQueueIndex, 1)
-// 	return int(qIndex) % length
-// }
+func (info *TopicPublishInfo) fetchQueueIndex() int {
+	length := len(info.MqList)
+	if length <= 0 {
+		return -1
+	}
+	qIndex := atomic.AddInt32(&info.TopicQueueIndex, 1)
+	return int(qIndex) % length
+}
 
 func (s *namesrvs) UpdateTopicRouteInfo(topic string) (*TopicRouteData, bool, error) {
 	return s.UpdateTopicRouteInfoWithDefault(topic, "", 0)
@@ -112,7 +115,10 @@ func (s *namesrvs) UpdateTopicRouteInfo(topic string) (*TopicRouteData, bool, er
 
 func (s *namesrvs) CheckTopicRouteHasTopic(topic string) bool {
 	_, err := s.queryTopicRouteInfoFromServer(topic)
-	return err == nil
+	if err != nil {
+		return false
+	}
+	return true
 }
 
 func (s *namesrvs) UpdateTopicRouteInfoWithDefault(topic string, defaultTopic string, defaultQueueNum int) (*TopicRouteData, bool, error) {
@@ -547,13 +553,16 @@ func (routeData *TopicRouteData) decode(data string) error {
 		}
 		addrs := v.Get("brokerAddrs").String()
 		strs := strings.Split(addrs[1:len(addrs)-1], ",")
-		for _, str := range strs {
-			i := strings.Index(str, ":")
-			if i < 0 {
-				continue
+		if strs != nil {
+			for _, str := range strs {
+				i := strings.Index(str, ":")
+				if i < 0 {
+					continue
+				}
+				brokerId := strings.ReplaceAll(str[0:i], "\"", "")
+				id, _ := strconv.ParseInt(brokerId, 10, 64)
+				bd.BrokerAddresses[id] = strings.Replace(str[i+1:], "\"", "", -1)
 			}
-			id, _ := strconv.ParseInt(str[0:i], 10, 64)
-			bd.BrokerAddresses[id] = strings.Replace(str[i+1:], "\"", "", -1)
 		}
 		routeData.BrokerDataList[idx] = bd
 	}
@@ -566,8 +575,14 @@ func (routeData *TopicRouteData) clone() *TopicRouteData {
 		QueueDataList:  make([]*QueueData, len(routeData.QueueDataList)),
 		BrokerDataList: make([]*BrokerData, len(routeData.BrokerDataList)),
 	}
-	copy(cloned.QueueDataList, routeData.QueueDataList)
-	copy(cloned.BrokerDataList, routeData.BrokerDataList)
+
+	for index, value := range routeData.QueueDataList {
+		cloned.QueueDataList[index] = value
+	}
+
+	for index, value := range routeData.BrokerDataList {
+		cloned.BrokerDataList[index] = value
+	}
 
 	return cloned
 }
@@ -634,10 +649,10 @@ func (q *QueueData) Equals(qd *QueueData) bool {
 
 // BrokerData BrokerData
 type BrokerData struct {
-	Cluster         string           `json:"cluster"`
-	BrokerName      string           `json:"brokerName"`
-	BrokerAddresses map[int64]string `json:"brokerAddrs"`
-	// brokerAddressesLock sync.RWMutex
+	Cluster             string           `json:"cluster"`
+	BrokerName          string           `json:"brokerName"`
+	BrokerAddresses     map[int64]string `json:"brokerAddrs"`
+	brokerAddressesLock sync.RWMutex
 }
 
 func (b *BrokerData) Equals(bd *BrokerData) bool {

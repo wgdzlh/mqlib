@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/wgdzlh/mqlib/rk"
+	rocketmq "github.com/wgdzlh/mqlib/rk"
 	"github.com/wgdzlh/mqlib/rk/primitive"
 	"github.com/wgdzlh/mqlib/rk/producer"
 )

@@ -20,10 +20,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/wgdzlh/mqlib/rk"
+	"os"
+
+	rocketmq "github.com/wgdzlh/mqlib/rk"
 	"github.com/wgdzlh/mqlib/rk/consumer"
 	"github.com/wgdzlh/mqlib/rk/primitive"
-	"os"
 )
 
 func main() {

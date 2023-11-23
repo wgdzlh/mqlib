@@ -3,7 +3,7 @@
 ### go mod
 ```
 require (
-    github.com/wgdzlh/mqlib/rk v2.1.0-rc3
+    github.com/apache/rocketmq-client-go/v2 v2.1.0-rc3
 )
 ```
 
@@ -89,8 +89,8 @@ c, err := rocketmq.NewPushConsumer(
 
 - Subscribe a topic(only support one topic now), and define your consuming function
 ```
-err := c.Subscribe("test", consumer.MessageSelector{}, func(ctx *consumer.ConsumeMessageContext,
-    msgs []*primitive.MessageExt) (consumer.ConsumeResult, error) {
+err := c.Subscribe("test", consumer.MessageSelector{}, func(ctx context.Context,
+		msgs ...*primitive.MessageExt) (consumer.ConsumeResult, error) {
     rlog.Info("Subscribe Callback", map[string]interface{}{
         "msgs": msgs,
     })

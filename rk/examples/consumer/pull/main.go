@@ -23,7 +23,7 @@ import (
 	"github.com/wgdzlh/mqlib/rk/errors"
 	"time"
 
-	"github.com/wgdzlh/mqlib/rk"
+	rocketmq "github.com/wgdzlh/mqlib/rk"
 	"github.com/wgdzlh/mqlib/rk/consumer"
 	"github.com/wgdzlh/mqlib/rk/primitive"
 	"github.com/wgdzlh/mqlib/rk/rlog"
@@ -43,7 +43,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	queue := primitive.MessageQueue{
+	queue := &primitive.MessageQueue{
 		Topic:      "TopicTest",
 		BrokerName: "", // replace with your broker name. otherwise, pull will failed.
 		QueueId:    0,

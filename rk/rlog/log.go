@@ -28,16 +28,22 @@ import (
 )
 
 const (
-	LogKeyProducerGroup    = "producerGroup"
-	LogKeyConsumerGroup    = "consumerGroup"
-	LogKeyTopic            = "topic"
-	LogKeyMessageQueue     = "MessageQueue"
-	LogKeyUnderlayError    = "underlayError"
-	LogKeyBroker           = "broker"
-	LogKeyValueChangedFrom = "changedFrom"
-	LogKeyValueChangedTo   = "changeTo"
-	LogKeyPullRequest      = "PullRequest"
-	LogKeyTimeStamp        = "timestamp"
+	LogKeyProducerGroup        = "producerGroup"
+	LogKeyConsumerGroup        = "consumerGroup"
+	LogKeyTopic                = "topic"
+	LogKeyMessageQueue         = "MessageQueue"
+	LogKeyAllocateMessageQueue = "AllocateMessageQueue"
+	LogKeyUnderlayError        = "underlayError"
+	LogKeyBroker               = "broker"
+	LogKeyValueChangedFrom     = "changedFrom"
+	LogKeyValueChangedTo       = "changeTo"
+	LogKeyPullRequest          = "PullRequest"
+	LogKeyTimeStamp            = "timestamp"
+	LogKeyMessageId            = "msgId"
+	LogKeyStoreHost            = "storeHost"
+	LogKeyQueueId              = "queueId"
+	LogKeyQueueOffset          = "queueOffset"
+	LogKeyMessages             = "messages"
 )
 
 type Logger interface {

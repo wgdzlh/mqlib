@@ -21,16 +21,17 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/wgdzlh/mqlib/rk"
-	"github.com/wgdzlh/mqlib/rk/consumer"
-	"github.com/wgdzlh/mqlib/rk/primitive"
-	"github.com/wgdzlh/mqlib/rk/rlog"
 	"os"
 	"os/signal"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	rocketmq "github.com/wgdzlh/mqlib/rk"
+	"github.com/wgdzlh/mqlib/rk/consumer"
+	"github.com/wgdzlh/mqlib/rk/primitive"
+	"github.com/wgdzlh/mqlib/rk/rlog"
 )
 
 type statiBenchmarkConsumerSnapshot struct {

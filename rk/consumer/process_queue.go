@@ -20,10 +20,12 @@ package consumer
 import (
 	"strconv"
 	"sync"
+
 	"time"
 
 	"github.com/emirpasic/gods/maps/treemap"
 	"github.com/emirpasic/gods/utils"
+	gods_util "github.com/emirpasic/gods/utils"
 	"go.uber.org/atomic"
 
 	"github.com/wgdzlh/mqlib/rk/internal"
@@ -38,7 +40,6 @@ const (
 )
 
 type processQueue struct {
-	// consumeLock                sync.Mutex
 	cachedMsgCount             *atomic.Int64
 	cachedMsgSize              *atomic.Int64
 	tryUnlockTimes             int64
@@ -46,6 +47,7 @@ type processQueue struct {
 	msgAccCnt                  int64
 	msgCache                   *treemap.Map
 	mutex                      sync.RWMutex
+	consumeLock                sync.Mutex
 	consumingMsgOrderlyTreeMap *treemap.Map
 	dropped                    *atomic.Bool
 	lastPullTime               atomic.Value
@@ -58,10 +60,11 @@ type processQueue struct {
 	order                      bool
 	closeChanOnce              *sync.Once
 	closeChan                  chan struct{}
+	maxOffsetInQueue           int64
 }
 
 func newProcessQueue(order bool) *processQueue {
-	consumingMsgOrderlyTreeMap := treemap.NewWith(utils.Int64Comparator)
+	consumingMsgOrderlyTreeMap := treemap.NewWith(gods_util.Int64Comparator)
 
 	lastConsumeTime := atomic.Value{}
 	lastConsumeTime.Store(time.Now())
@@ -86,6 +89,7 @@ func newProcessQueue(order bool) *processQueue {
 		closeChan:                  make(chan struct{}),
 		locked:                     atomic.NewBool(false),
 		dropped:                    atomic.NewBool(false),
+		maxOffsetInQueue:           -1,
 	}
 	return pq
 }
@@ -94,11 +98,11 @@ func (pq *processQueue) putMessage(messages ...*primitive.MessageExt) {
 	if len(messages) == 0 {
 		return
 	}
-	if pq.IsDropped() {
+	if pq.IsDroppd() {
 		return
 	}
-	validMessageCount := 0
 	pq.mutex.Lock()
+	validMessageCount := 0
 	for idx := range messages {
 		msg := messages[idx]
 		_, found := pq.msgCache.Get(msg.QueueOffset)
@@ -115,10 +119,8 @@ func (pq *processQueue) putMessage(messages ...*primitive.MessageExt) {
 
 		pq.cachedMsgSize.Add(int64(len(msg.Body)))
 	}
-
 	pq.cachedMsgCount.Add(int64(validMessageCount))
 	pq.mutex.Unlock()
-
 	if !pq.order {
 		select {
 		case <-pq.closeChan:
@@ -126,6 +128,7 @@ func (pq *processQueue) putMessage(messages ...*primitive.MessageExt) {
 		case pq.msgCh <- messages:
 		}
 	}
+
 	if pq.cachedMsgCount.Load() > 0 && !pq.consuming {
 		pq.consuming = true
 	}
@@ -150,14 +153,12 @@ func (pq *processQueue) IsLock() bool {
 
 func (pq *processQueue) WithDropped(dropped bool) {
 	pq.dropped.Store(dropped)
-	if dropped {
-		pq.closeChanOnce.Do(func() {
-			close(pq.closeChan)
-		})
-	}
+	pq.closeChanOnce.Do(func() {
+		close(pq.closeChan)
+	})
 }
 
-func (pq *processQueue) IsDropped() bool {
+func (pq *processQueue) IsDroppd() bool {
 	return pq.dropped.Load()
 }
 
@@ -226,11 +227,11 @@ func (pq *processQueue) removeMessage(messages ...*primitive.MessageExt) int64 {
 }
 
 func (pq *processQueue) isLockExpired() bool {
-	return time.Since(pq.LastLockTime()) > _RebalanceLockMaxTime
+	return time.Now().Sub(pq.LastLockTime()) > _RebalanceLockMaxTime
 }
 
 func (pq *processQueue) isPullExpired() bool {
-	return time.Since(pq.LastPullTime()) > _PullMaxIdleTime
+	return time.Now().Sub(pq.LastPullTime()) > _PullMaxIdleTime
 }
 
 func (pq *processQueue) cleanExpiredMsg(pc *pushConsumer) {
@@ -258,22 +259,32 @@ func (pq *processQueue) cleanExpiredMsg(pc *pushConsumer) {
 					"time":                   startTime,
 					rlog.LogKeyUnderlayError: err,
 				})
+				pq.mutex.RUnlock()
 				continue
 			}
 			if time.Now().UnixNano()/1e6-st <= int64(pc.option.ConsumeTimeout/time.Millisecond) {
 				pq.mutex.RUnlock()
 				return
 			}
-		}
-		pq.mutex.RUnlock()
-
-		if !pc.sendMessageBack("", msg, int(3+msg.ReconsumeTimes)) {
-			rlog.Error("send message back to broker error when clean expired messages", map[string]interface{}{
-				rlog.LogKeyConsumerGroup: pc.consumerGroup,
+			rlog.Info("send expire msg back. ", map[string]interface{}{
+				rlog.LogKeyTopic:       msg.Topic,
+				rlog.LogKeyMessageId:   msg.MsgId,
+				"startTime":            startTime,
+				rlog.LogKeyStoreHost:   msg.StoreHost,
+				rlog.LogKeyQueueId:     msg.Queue.QueueId,
+				rlog.LogKeyQueueOffset: msg.QueueOffset,
 			})
-			continue
+			pq.mutex.RUnlock()
+			if !pc.sendMessageBack("", msg, int(3+msg.ReconsumeTimes)) {
+				rlog.Error("send message back to broker error when clean expired messages", map[string]interface{}{
+					rlog.LogKeyConsumerGroup: pc.consumerGroup,
+				})
+				continue
+			}
+			pq.removeMessage(msg)
+		} else {
+			pq.mutex.RUnlock()
 		}
-		pq.removeMessage(msg)
 	}
 }
 
@@ -373,6 +384,7 @@ func (pq *processQueue) clear() {
 	pq.cachedMsgCount.Store(0)
 	pq.cachedMsgSize.Store(0)
 	pq.queueOffsetMax = 0
+	pq.maxOffsetInQueue = -1
 }
 
 func (pq *processQueue) commit() int64 {

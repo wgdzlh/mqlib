@@ -20,9 +20,10 @@ package utils
 import (
 	"bytes"
 	"compress/zlib"
-	"github.com/wgdzlh/mqlib/rk/errors"
 	"io/ioutil"
 	"sync"
+
+	"github.com/wgdzlh/mqlib/rk/errors"
 )
 
 var zlibWriterPools []sync.Pool

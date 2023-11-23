@@ -18,8 +18,9 @@ limitations under the License.
 package consumer
 
 import (
-	"github.com/wgdzlh/mqlib/rk/rlog"
 	"testing"
+
+	"github.com/wgdzlh/mqlib/rk/rlog"
 
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/wgdzlh/mqlib/rk/primitive"

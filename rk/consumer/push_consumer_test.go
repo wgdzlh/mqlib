@@ -21,11 +21,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/wgdzlh/mqlib/rk/rlog"
+
 	"github.com/golang/mock/gomock"
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/wgdzlh/mqlib/rk/internal"
 	"github.com/wgdzlh/mqlib/rk/primitive"
-	"github.com/wgdzlh/mqlib/rk/rlog"
 )
 
 func mockB4Start(c *pushConsumer) {
@@ -53,9 +54,6 @@ func TestStart(t *testing.T) {
 			})
 			return ConsumeSuccess, nil
 		})
-		if err != nil {
-			t.Fatal(err)
-		}
 
 		_, exists := c.subscriptionDataTable.Load("TopicTest")
 		So(exists, ShouldBeTrue)
@@ -83,6 +81,7 @@ func TestStart(t *testing.T) {
 
 		Convey("test topic route info not found", func() {
 			client.EXPECT().Shutdown().Return()
+			client.EXPECT().UnregisterConsumer(gomock.Any()).Return()
 			err = c.Start()
 			So(err.Error(), ShouldContainSubstring, "route info not found")
 		})

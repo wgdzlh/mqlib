@@ -20,6 +20,7 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -32,14 +33,14 @@ const (
 )
 
 var (
-	// ipRegex, _ = regexp.Compile(`^((25[0-5]|2[0-4]\d|((1\d{2})|([1-9]?\d)))\.){3}(25[0-5]|2[0-4]\d|((1\d{2})|([1-9]?\d)))`)
+	ipRegex, _ = regexp.Compile(`^((25[0-5]|2[0-4]\d|((1\d{2})|([1-9]?\d)))\.){3}(25[0-5]|2[0-4]\d|((1\d{2})|([1-9]?\d)))`)
 
-	ErrNoNameserver = errors.New("nameServerAddrs can't be empty")
+	ErrNoNameserver = errors.New("nameServerAddrs can't be empty.")
 	ErrMultiIP      = errors.New("multiple IP addr does not support")
 	ErrIllegalIP    = errors.New("IP addr error")
 )
 
-//go:generate mockgen -source namesrv.go -destination mock_namesrv.go -self_package github.com/wgdzlh/mqlib/rk/internal  --package internal Namesrvs
+//go:generate mockgen -source namesrv.go -destination mock_namesrv.go -self_package github.com/apache/rocketmq-client-go/v2/internal  --package internal Namesrvs
 type Namesrvs interface {
 	UpdateNameServerAddress()
 

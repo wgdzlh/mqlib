@@ -20,7 +20,7 @@ package consumer
 import (
 	"strings"
 
-	"github.com/stathat/consistent"
+	"stathat.com/c/consistent"
 
 	"github.com/wgdzlh/mqlib/rk/internal/utils"
 	"github.com/wgdzlh/mqlib/rk/primitive"

@@ -19,8 +19,9 @@ package producer
 
 import (
 	"context"
-	"github.com/wgdzlh/mqlib/rk/errors"
 	"testing"
+
+	"github.com/wgdzlh/mqlib/rk/errors"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -149,7 +150,11 @@ func TestSync(t *testing.T) {
 
 	mockB4Send(p)
 
-	client.EXPECT().InvokeSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil)
+	cmd := &remote.RemotingCommand{
+		Code: internal.ResSuccess,
+	}
+
+	client.EXPECT().InvokeSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(cmd, nil)
 	client.EXPECT().ProcessSendResponse(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(
 		func(brokerName string, cmd *remote.RemotingCommand, resp *primitive.SendResult, msgs ...*primitive.Message) {
 			resp.Status = expectedResp.Status
@@ -309,7 +314,11 @@ func TestSyncWithNamespace(t *testing.T) {
 
 	mockB4Send(p)
 
-	client.EXPECT().InvokeSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil)
+	cmd := &remote.RemotingCommand{
+		Code: internal.ResSuccess,
+	}
+
+	client.EXPECT().InvokeSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(cmd, nil)
 	client.EXPECT().ProcessSendResponse(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(
 		func(brokerName string, cmd *remote.RemotingCommand, resp *primitive.SendResult, msgs ...*primitive.Message) {
 			resp.Status = expectedResp.Status

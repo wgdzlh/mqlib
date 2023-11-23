@@ -18,9 +18,10 @@ limitations under the License.
 package primitive
 
 import (
-	"github.com/wgdzlh/mqlib/rk/errors"
 	"regexp"
 	"strings"
+
+	"github.com/wgdzlh/mqlib/rk/errors"
 )
 
 var (

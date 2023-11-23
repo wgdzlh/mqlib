@@ -19,8 +19,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/wgdzlh/mqlib/rk/rlog"
 	"os"
+
+	"github.com/wgdzlh/mqlib/rk/rlog"
 )
 
 type command interface {

@@ -27,11 +27,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/wgdzlh/mqlib/rk/errors"
-
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tidwall/gjson"
 
+	"github.com/wgdzlh/mqlib/rk/errors"
+	"github.com/wgdzlh/mqlib/rk/hooks"
 	"github.com/wgdzlh/mqlib/rk/internal"
 	"github.com/wgdzlh/mqlib/rk/internal/remote"
 	"github.com/wgdzlh/mqlib/rk/internal/utils"
@@ -53,10 +53,10 @@ const (
 	_BrokerSuspendMaxTime = 20 * time.Second
 
 	// Long polling mode, the Consumer connection timeout (must greater than _BrokerSuspendMaxTime)
-	// _ConsumerTimeoutWhenSuspend = 30 * time.Second
+	_ConsumerTimeoutWhenSuspend = 30 * time.Second
 
 	// Offset persistent interval for consumer
-	// _PersistConsumerOffsetInterval = 5 * time.Second
+	_PersistConsumerOffsetInterval = 5 * time.Second
 )
 
 type ConsumeType string
@@ -253,7 +253,7 @@ type defaultConsumer struct {
 	processQueueTable sync.Map
 
 	// key: topic(string)
-	// value: []*primitive.MessageQueue
+	// value: map[int]*primitive.MessageQueue
 	topicSubscribeInfoTable sync.Map
 
 	// key: topic
@@ -269,6 +269,7 @@ type defaultConsumer struct {
 }
 
 func (dc *defaultConsumer) start() error {
+	dc.consumerGroup = utils.WrapNamespace(dc.option.Namespace, dc.consumerGroup)
 	if dc.model == Clustering {
 		// set retry topic
 		retryTopic := internal.GetRetryTopic(dc.consumerGroup)
@@ -416,7 +417,7 @@ func (dc *defaultConsumer) doBalance() {
 			changed := dc.updateProcessQueueTable(topic, allocateResult)
 			if changed {
 				dc.mqChanged(topic, mqAll, allocateResult)
-				rlog.Debug("MessageQueue do balance done", map[string]interface{}{
+				rlog.Info("MessageQueue do balance done", map[string]interface{}{
 					rlog.LogKeyConsumerGroup: dc.consumerGroup,
 					rlog.LogKeyTopic:         topic,
 					"clientID":               dc.client.ClientID(),
@@ -437,12 +438,14 @@ func (dc *defaultConsumer) truncateMessageQueueNotMyTopic() {
 		mq := key.(primitive.MessageQueue)
 		pq := value.(*processQueue)
 		if _, ok := dc.subscriptionDataTable.Load(mq.Topic); !ok {
-			dc.removeUnnecessaryMessageQueue(&mq, pq)
-			dc.processQueueTable.Delete(key)
-			rlog.Debug("remove unnecessary mq because unsubscribed", map[string]interface{}{
-				rlog.LogKeyConsumerGroup: dc.consumerGroup,
-				rlog.LogKeyMessageQueue:  mq.String(),
-			})
+			pq.WithDropped(true)
+			if dc.removeUnnecessaryMessageQueue(&mq, pq) {
+				dc.processQueueTable.Delete(key)
+				rlog.Info("remove unnecessary mq because unsubscribed", map[string]interface{}{
+					rlog.LogKeyConsumerGroup: dc.consumerGroup,
+					rlog.LogKeyMessageQueue:  mq.String(),
+				})
+			}
 		}
 		return true
 	})
@@ -451,7 +454,7 @@ func (dc *defaultConsumer) truncateMessageQueueNotMyTopic() {
 func (dc *defaultConsumer) SubscriptionDataList() []*internal.SubscriptionData {
 	result := make([]*internal.SubscriptionData, 0)
 	dc.subscriptionDataTable.Range(func(key, value interface{}) bool {
-		result = append(result, value.(*internal.SubscriptionData))
+		result = append(result, value.(*internal.SubscriptionData).Clone())
 		return true
 	})
 	return result
@@ -483,10 +486,9 @@ func (dc *defaultConsumer) lock(mq *primitive.MessageQueue) bool {
 		MQs:           []*primitive.MessageQueue{mq},
 	}
 	lockedMQ := dc.doLock(brokerResult.BrokerAddr, body)
-	var _mq primitive.MessageQueue
 	var lockOK bool
 	for idx := range lockedMQ {
-		_mq = lockedMQ[idx]
+		_mq := lockedMQ[idx]
 		v, exist := dc.processQueueTable.Load(_mq)
 		if exist {
 			pq := v.(*processQueue)
@@ -532,7 +534,6 @@ func (dc *defaultConsumer) unlock(mq *primitive.MessageQueue, oneway bool) {
 }
 
 func (dc *defaultConsumer) lockAll() {
-	var _mq primitive.MessageQueue
 	mqMapSet := dc.buildProcessQueueTableByBrokerName()
 	for broker, mqs := range mqMapSet {
 		if len(mqs) == 0 {
@@ -548,20 +549,20 @@ func (dc *defaultConsumer) lockAll() {
 			MQs:           mqs,
 		}
 		lockedMQ := dc.doLock(brokerResult.BrokerAddr, body)
-		set := make(map[primitive.MessageQueue]struct{})
+		set := make(map[primitive.MessageQueue]bool)
 		for idx := range lockedMQ {
-			_mq = lockedMQ[idx]
+			_mq := lockedMQ[idx]
 			v, exist := dc.processQueueTable.Load(_mq)
 			if exist {
 				pq := v.(*processQueue)
 				pq.WithLock(true)
 				pq.UpdateLastConsumeTime()
 			}
-			set[_mq] = struct{}{}
+			set[_mq] = true
 		}
 		for idx := range mqs {
-			_mq = *mqs[idx]
-			if _, ok := set[_mq]; !ok {
+			_mq := mqs[idx]
+			if !set[*_mq] {
 				v, exist := dc.processQueueTable.Load(_mq)
 				if exist {
 					pq := v.(*processQueue)
@@ -579,7 +580,6 @@ func (dc *defaultConsumer) lockAll() {
 }
 
 func (dc *defaultConsumer) unlockAll(oneway bool) {
-	var _mq primitive.MessageQueue
 	mqMapSet := dc.buildProcessQueueTableByBrokerName()
 	for broker, mqs := range mqMapSet {
 		if len(mqs) == 0 {
@@ -596,7 +596,7 @@ func (dc *defaultConsumer) unlockAll(oneway bool) {
 		}
 		dc.doUnlock(brokerResult.BrokerAddr, body, oneway)
 		for idx := range mqs {
-			_mq = *mqs[idx]
+			_mq := mqs[idx]
 			v, exist := dc.processQueueTable.Load(_mq)
 			if exist {
 				rlog.Info("lock MessageQueue", map[string]interface{}{
@@ -665,7 +665,12 @@ func (dc *defaultConsumer) buildProcessQueueTableByBrokerName() map[string][]*pr
 
 	dc.processQueueTable.Range(func(key, value interface{}) bool {
 		mq := key.(primitive.MessageQueue)
-		result[mq.BrokerName] = append(result[mq.BrokerName], &mq)
+		mqs, exist := result[mq.BrokerName]
+		if !exist {
+			mqs = make([]*primitive.MessageQueue, 0)
+		}
+		mqs = append(mqs, &mq)
+		result[mq.BrokerName] = mqs
 		return true
 	})
 
@@ -674,104 +679,103 @@ func (dc *defaultConsumer) buildProcessQueueTableByBrokerName() map[string][]*pr
 
 func (dc *defaultConsumer) updateProcessQueueTable(topic string, mqs []*primitive.MessageQueue) bool {
 	var changed bool
-	mqSet := make(map[primitive.MessageQueue]struct{})
+	mqSet := make(map[primitive.MessageQueue]bool)
 	for idx := range mqs {
-		mqSet[*mqs[idx]] = struct{}{}
+		mqSet[*mqs[idx]] = true
 	}
 	dc.processQueueTable.Range(func(key, value interface{}) bool {
 		mq := key.(primitive.MessageQueue)
 		pq := value.(*processQueue)
 		if mq.Topic == topic {
-			if _, ok := mqSet[mq]; !ok {
-				dc.removeUnnecessaryMessageQueue(&mq, pq)
-				dc.processQueueTable.Delete(key)
-				changed = true
-				rlog.Debug("remove unnecessary mq when updateProcessQueueTable", map[string]interface{}{
-					rlog.LogKeyConsumerGroup: dc.consumerGroup,
-					rlog.LogKeyMessageQueue:  mq.String(),
-				})
+			if !mqSet[mq] {
+				pq.WithDropped(true)
+				if dc.removeUnnecessaryMessageQueue(&mq, pq) {
+					dc.processQueueTable.Delete(key)
+					changed = true
+					rlog.Info("remove unnecessary mq when updateProcessQueueTable", map[string]interface{}{
+						rlog.LogKeyConsumerGroup: dc.consumerGroup,
+						rlog.LogKeyMessageQueue:  mq.String(),
+					})
+				}
 			} else if pq.isPullExpired() && dc.cType == _PushConsume {
-				dc.removeUnnecessaryMessageQueue(&mq, pq)
-				dc.processQueueTable.Delete(key)
-				changed = true
-				rlog.Debug("remove unnecessary mq because pull was expired, prepare to fix it", map[string]interface{}{
-					rlog.LogKeyConsumerGroup: dc.consumerGroup,
-					rlog.LogKeyMessageQueue:  mq.String(),
-				})
+				pq.WithDropped(true)
+				if dc.removeUnnecessaryMessageQueue(&mq, pq) {
+					dc.processQueueTable.Delete(key)
+					changed = true
+					rlog.Warning("remove unnecessary mq because pull was expired, prepare to fix it", map[string]interface{}{
+						rlog.LogKeyConsumerGroup: dc.consumerGroup,
+						rlog.LogKeyMessageQueue:  mq.String(),
+					})
+				}
 			}
 		}
 		return true
 	})
 
-	if dc.cType == _PushConsume {
-		for item := range mqSet {
-			// BUG: the mq will send to channel, if not copy once, the next iter will modify the mq in the channel.
-			mq := item
+	for item := range mqSet {
+		// BUG: the mq will send to channel, if not copy once, the next iter will modify the mq in the channel.
+		mq := item
+		_, exist := dc.processQueueTable.Load(mq)
+		if exist {
+			continue
+		}
+		if dc.consumeOrderly && !dc.lock(&mq) {
+			rlog.Warning("do defaultConsumer, add a new mq failed, because lock failed", map[string]interface{}{
+				rlog.LogKeyConsumerGroup: dc.consumerGroup,
+				rlog.LogKeyMessageQueue:  mq.String(),
+			})
+			continue
+		}
+		dc.storage.remove(&mq)
+		nextOffset, err := dc.computePullFromWhereWithException(&mq)
+
+		if nextOffset >= 0 && err == nil {
 			_, exist := dc.processQueueTable.Load(mq)
 			if exist {
-				continue
-			}
-			if dc.consumeOrderly && !dc.lock(&mq) {
-				rlog.Warning("do defaultConsumer, add a new mq failed, because lock failed", map[string]interface{}{
+				rlog.Debug("updateProcessQueueTable do defaultConsumer, mq already exist", map[string]interface{}{
 					rlog.LogKeyConsumerGroup: dc.consumerGroup,
 					rlog.LogKeyMessageQueue:  mq.String(),
 				})
-				continue
-			}
-			dc.storage.remove(&mq)
-			nextOffset, err := dc.computePullFromWhereWithException(&mq)
-
-			if nextOffset >= 0 && err == nil {
-				_, exist := dc.processQueueTable.Load(mq)
-				if exist {
-					rlog.Debug("do defaultConsumer, mq already exist", map[string]interface{}{
-						rlog.LogKeyConsumerGroup: dc.consumerGroup,
-						rlog.LogKeyMessageQueue:  mq.String(),
-					})
-				} else {
-					rlog.Debug("do defaultConsumer, add a new mq", map[string]interface{}{
-						rlog.LogKeyConsumerGroup: dc.consumerGroup,
-						rlog.LogKeyMessageQueue:  mq.String(),
-					})
-					pq := newProcessQueue(dc.consumeOrderly)
-					dc.processQueueTable.Store(mq, pq)
-					pr := PullRequest{
-						consumerGroup: dc.consumerGroup,
-						mq:            &mq,
-						pq:            pq,
-						nextOffset:    nextOffset,
-					}
-					dc.prCh <- pr
-					changed = true
-				}
 			} else {
-				rlog.Warning("do defaultConsumer, add a new mq failed", map[string]interface{}{
+				rlog.Debug("updateProcessQueueTable do defaultConsumer, add a new mq", map[string]interface{}{
 					rlog.LogKeyConsumerGroup: dc.consumerGroup,
 					rlog.LogKeyMessageQueue:  mq.String(),
 				})
+				pq := newProcessQueue(dc.consumeOrderly)
+				dc.processQueueTable.Store(mq, pq)
+				pr := PullRequest{
+					consumerGroup: dc.consumerGroup,
+					mq:            &mq,
+					pq:            pq,
+					nextOffset:    nextOffset,
+				}
+				dc.prCh <- pr
+				changed = true
 			}
+		} else {
+			rlog.Warning("do defaultConsumer, add a new mq failed", map[string]interface{}{
+				rlog.LogKeyConsumerGroup: dc.consumerGroup,
+				rlog.LogKeyMessageQueue:  mq.String(),
+			})
 		}
 	}
 
 	return changed
 }
 
-func (dc *defaultConsumer) removeUnnecessaryMessageQueue(mq *primitive.MessageQueue, pq *processQueue) {
-	pq.WithDropped(true)
+func (dc *defaultConsumer) removeUnnecessaryMessageQueue(mq *primitive.MessageQueue, pq *processQueue) bool {
 	dc.storage.persist([]*primitive.MessageQueue{mq})
 	dc.storage.remove(mq)
+	return true
 }
 
 // Deprecated: Use computePullFromWhereWithException instead.
-// func (dc *defaultConsumer) computePullFromWhere(mq *primitive.MessageQueue) int64 {
-// 	result, _ := dc.computePullFromWhereWithException(mq)
-// 	return result
-// }
+func (dc *defaultConsumer) computePullFromWhere(mq *primitive.MessageQueue) int64 {
+	result, _ := dc.computePullFromWhereWithException(mq)
+	return result
+}
 
 func (dc *defaultConsumer) computePullFromWhereWithException(mq *primitive.MessageQueue) (int64, error) {
-	if dc.cType == _PullConsume {
-		return 0, nil
-	}
 	result := int64(-1)
 	lastOffset, err := dc.storage.readWithException(mq, _ReadFromStore)
 	if err != nil {
@@ -867,10 +871,10 @@ func (dc *defaultConsumer) pullInner(ctx context.Context, queue *primitive.Messa
 		SysFlag:       sysFlag,
 		CommitOffset:  commitOffsetValue,
 		// TODO: 和java对齐
-		SuspendTimeout: _BrokerSuspendMaxTime,
-		SubExpression:  data.SubString,
+		SuspendTimeoutMillis: _BrokerSuspendMaxTime,
+		SubExpression:        data.SubString,
 		// TODO: add subversion
-		ExpressionType: data.ExpType,
+		ExpressionType: string(data.ExpType),
 	}
 
 	if data.ExpType == string(TAG) {
@@ -890,12 +894,13 @@ func (dc *defaultConsumer) processPullResult(mq *primitive.MessageQueue, result 
 
 	switch result.Status {
 	case primitive.PullFound:
-		msgs := primitive.DecodeMessage(result.GetBody())
+		result.SetMessageExts(primitive.DecodeMessage(result.GetBody()))
+		msgs := result.GetMessageExts()
 
 		// filter message according to tags
 		msgListFilterAgain := msgs
 		if data.Tags.Len() > 0 && !data.ClassFilterMode {
-			msgListFilterAgain = make([]*primitive.MessageExt, 0, len(msgs))
+			msgListFilterAgain = make([]*primitive.MessageExt, 0)
 			for _, msg := range msgs {
 				_, exist := data.Tags.Contains(msg.GetTags())
 				if exist {
@@ -904,8 +909,21 @@ func (dc *defaultConsumer) processPullResult(mq *primitive.MessageQueue, result 
 			}
 		}
 
+		if dc.option.filterMessageHooks != nil {
+			for _, hook := range dc.option.filterMessageHooks {
+				ctx := &hooks.FilterMessageContext{
+					ConsumerGroup: dc.consumerGroup,
+					Msg:           msgListFilterAgain,
+					MQ:            mq,
+					UnitMode:      dc.unitMode,
+				}
+				msgListFilterAgain, _ = hook(ctx)
+			}
+		}
+
 		// TODO: add filter message hook
 		for _, msg := range msgListFilterAgain {
+			msg.Queue = mq
 			traFlag, _ := strconv.ParseBool(msg.GetProperty(primitive.PropertyTransactionPrepared))
 			if traFlag {
 				msg.TransactionId = msg.GetProperty(primitive.PropertyUniqueClientMessageIdKeyIndex)
@@ -951,9 +969,9 @@ func (dc *defaultConsumer) findConsumerList(topic string) []string {
 	return nil
 }
 
-// func (dc *defaultConsumer) sendBack(msg *primitive.MessageExt, level int) error {
-// 	return nil
-// }
+func (dc *defaultConsumer) sendBack(msg *primitive.MessageExt, level int) error {
+	return nil
+}
 
 // QueryMaxOffset with specific queueId and topic
 func (dc *defaultConsumer) queryMaxOffset(mq *primitive.MessageQueue) (int64, error) {

@@ -19,12 +19,13 @@ package main
 
 import (
 	"flag"
-	"github.com/wgdzlh/mqlib/rk/errors"
-	"github.com/wgdzlh/mqlib/rk/rlog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/wgdzlh/mqlib/rk/errors"
+	"github.com/wgdzlh/mqlib/rk/rlog"
 )
 
 type stableTest struct {

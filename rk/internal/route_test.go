@@ -19,9 +19,10 @@ package internal
 
 import (
 	"context"
-	"github.com/wgdzlh/mqlib/rk/errors"
 	"sync"
 	"testing"
+
+	"github.com/wgdzlh/mqlib/rk/errors"
 
 	"github.com/golang/mock/gomock"
 	. "github.com/smartystreets/goconvey/convey"

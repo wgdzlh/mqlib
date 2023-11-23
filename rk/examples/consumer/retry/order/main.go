@@ -28,7 +28,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/wgdzlh/mqlib/rk"
+	rocketmq "github.com/wgdzlh/mqlib/rk"
 	"github.com/wgdzlh/mqlib/rk/consumer"
 	"github.com/wgdzlh/mqlib/rk/primitive"
 )

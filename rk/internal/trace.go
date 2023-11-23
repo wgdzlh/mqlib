@@ -169,7 +169,12 @@ func (ctx *TraceContext) marshal2Bean() *TraceTransferBean {
 			buffer.WriteRune(contentSplitter)
 			buffer.WriteString(strconv.FormatInt(ctx.TimeStamp, 10))
 			buffer.WriteRune(contentSplitter)
-			buffer.WriteString(ctx.GroupName)
+			ss := strings.Split(ctx.GroupName, "%")
+			if len(ss) == 2 {
+				buffer.WriteString(ss[1])
+			} else {
+				buffer.WriteString(ctx.GroupName)
+			}
 			buffer.WriteRune(fieldSplitter)
 		}
 	}
@@ -277,7 +282,6 @@ func NewTraceDispatcher(traceCfg *primitive.TraceConfig) *traceDispatcher {
 	cliOp.Credentials = traceCfg.Credentials
 	cli := GetOrNewRocketMQClient(cliOp, nil)
 	if cli == nil {
-		cancel()
 		return nil
 	}
 	cliOp.Namesrv = cli.GetNameSrv()
@@ -301,8 +305,11 @@ func (td *traceDispatcher) GetTraceTopicName() string {
 func (td *traceDispatcher) Start() {
 	td.running = true
 	td.cli.Start()
+	maxWaitDuration := 5 * time.Millisecond
+	td.ticker = time.NewTicker(maxWaitDuration)
+	maxWaitTime := maxWaitDuration.Nanoseconds()
 	go primitive.WithRecover(func() {
-		td.process()
+		td.process(maxWaitTime)
 	})
 }
 
@@ -330,12 +337,9 @@ func (td *traceDispatcher) Append(ctx TraceContext) bool {
 }
 
 // process
-func (td *traceDispatcher) process() {
+func (td *traceDispatcher) process(maxWaitTime int64) {
 	var count int
 	var batch []TraceContext
-	maxWaitDuration := 5 * time.Millisecond
-	maxWaitTime := maxWaitDuration.Nanoseconds()
-	td.ticker = time.NewTicker(maxWaitDuration)
 	lastput := time.Now()
 	for {
 		select {
@@ -378,6 +382,7 @@ func (td *traceDispatcher) process() {
 				runtime.Gosched()
 			}
 			rlog.Info(fmt.Sprintf("------end trace send %v %v", td.input, td.batchCh), nil)
+			return
 		}
 	}
 }
@@ -415,7 +420,7 @@ type Keyset map[string]struct{}
 
 func (ks Keyset) slice() []string {
 	slice := make([]string, len(ks))
-	for k := range ks {
+	for k, _ := range ks {
 		slice = append(slice, k)
 	}
 	return slice

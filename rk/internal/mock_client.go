@@ -291,16 +291,16 @@ func (mr *MockRMQClientMockRecorder) UnregisterProducer(group interface{}) *gomo
 }
 
 // InvokeSync mocks base method
-func (m *MockRMQClient) InvokeSync(ctx context.Context, addr string, request *remote.RemotingCommand, timeout time.Duration) (*remote.RemotingCommand, error) {
-	ret := m.ctrl.Call(m, "InvokeSync", ctx, addr, request, timeout)
+func (m *MockRMQClient) InvokeSync(ctx context.Context, addr string, request *remote.RemotingCommand, timeoutMillis time.Duration) (*remote.RemotingCommand, error) {
+	ret := m.ctrl.Call(m, "InvokeSync", ctx, addr, request, timeoutMillis)
 	ret0, _ := ret[0].(*remote.RemotingCommand)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // InvokeSync indicates an expected call of InvokeSync
-func (mr *MockRMQClientMockRecorder) InvokeSync(ctx, addr, request, timeout interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvokeSync", reflect.TypeOf((*MockRMQClient)(nil).InvokeSync), ctx, addr, request, timeout)
+func (mr *MockRMQClientMockRecorder) InvokeSync(ctx, addr, request, timeoutMillis interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvokeSync", reflect.TypeOf((*MockRMQClient)(nil).InvokeSync), ctx, addr, request, timeoutMillis)
 }
 
 // InvokeAsync mocks base method
@@ -316,15 +316,15 @@ func (mr *MockRMQClientMockRecorder) InvokeAsync(ctx, addr, request, f interface
 }
 
 // InvokeOneWay mocks base method
-func (m *MockRMQClient) InvokeOneWay(ctx context.Context, addr string, request *remote.RemotingCommand, timeout time.Duration) error {
-	ret := m.ctrl.Call(m, "InvokeOneWay", ctx, addr, request, timeout)
+func (m *MockRMQClient) InvokeOneWay(ctx context.Context, addr string, request *remote.RemotingCommand, timeoutMillis time.Duration) error {
+	ret := m.ctrl.Call(m, "InvokeOneWay", ctx, addr, request, timeoutMillis)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InvokeOneWay indicates an expected call of InvokeOneWay
-func (mr *MockRMQClientMockRecorder) InvokeOneWay(ctx, addr, request, timeout interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvokeOneWay", reflect.TypeOf((*MockRMQClient)(nil).InvokeOneWay), ctx, addr, request, timeout)
+func (mr *MockRMQClientMockRecorder) InvokeOneWay(ctx, addr, request, timeoutMillis interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvokeOneWay", reflect.TypeOf((*MockRMQClient)(nil).InvokeOneWay), ctx, addr, request, timeoutMillis)
 }
 
 // CheckClientInBroker mocks base method
@@ -427,4 +427,9 @@ func (m *MockRMQClient) UpdatePublishInfo(topic string, data *TopicRouteData, ch
 // UpdatePublishInfo indicates an expected call of UpdatePublishInfo
 func (mr *MockRMQClientMockRecorder) UpdatePublishInfo(topic, data, changed interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePublishInfo", reflect.TypeOf((*MockRMQClient)(nil).UpdatePublishInfo), topic, data, changed)
+}
+
+// RegisterACL mocks base method
+func (m *MockRMQClient) RegisterACL() {
+	m.ctrl.Call(m, "RegisterACL")
 }

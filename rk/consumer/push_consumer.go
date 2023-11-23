@@ -72,6 +72,7 @@ type pushConsumer struct {
 	queueLock                    *QueueLock
 	done                         chan struct{}
 	closeOnce                    sync.Once
+	crCh                         map[string]chan struct{}
 }
 
 func NewPushConsumer(opts ...Option) (*pushConsumer, error) {
@@ -115,12 +116,13 @@ func NewPushConsumer(opts ...Option) (*pushConsumer, error) {
 		queueLock:       newQueueLock(),
 		done:            make(chan struct{}, 1),
 		consumeFunc:     utils.NewSet(),
+		crCh:            make(map[string]chan struct{}),
 	}
 	dc.mqChanged = p.messageQueueChanged
 	if p.consumeOrderly {
 		p.submitToConsume = p.consumeMessageOrderly
 	} else {
-		p.submitToConsume = p.consumeMessageCurrently
+		p.submitToConsume = p.consumeMessageConcurrently
 	}
 
 	p.interceptor = primitive.ChainInterceptors(p.option.Interceptors...)
@@ -137,7 +139,15 @@ func (pc *pushConsumer) Start() error {
 			"unitMode":               pc.unitMode,
 		})
 		atomic.StoreInt32(&pc.state, int32(internal.StateStartFailed))
-		pc.validate()
+		err = pc.validate()
+		if err != nil {
+			rlog.Error("the consumer group option validate fail", map[string]interface{}{
+				rlog.LogKeyConsumerGroup: pc.consumerGroup,
+				rlog.LogKeyUnderlayError: err.Error(),
+			})
+			err = errors.Wrap(err, "the consumer group option validate fail")
+			return
+		}
 
 		err = pc.client.RegisterConsumer(pc.consumerGroup, pc)
 		if err != nil {
@@ -153,11 +163,17 @@ func (pc *pushConsumer) Start() error {
 			return
 		}
 
+		retryTopic := internal.GetRetryTopic(pc.consumerGroup)
+		pc.crCh[retryTopic] = make(chan struct{}, pc.defaultConsumer.option.ConsumeGoroutineNums)
+
 		go func() {
+			// todo start clean msg expired
 			for {
 				select {
 				case pr := <-pc.prCh:
-					go pc.pullMessage(&pr)
+					go func() {
+						pc.pullMessage(&pr)
+					}()
 				case <-pc.done:
 					rlog.Info("push consumer close pullConsumer listener.", map[string]interface{}{
 						rlog.LogKeyConsumerGroup: pc.consumerGroup,
@@ -167,44 +183,51 @@ func (pc *pushConsumer) Start() error {
 			}
 		}()
 
-		if pc.consumeOrderly {
-			go primitive.WithRecover(func() {
-				// initial lock
-				time.Sleep(1000 * time.Millisecond)
-				pc.lockAll()
+		go primitive.WithRecover(func() {
+			if pc.consumeOrderly {
+				return
+			}
+			time.Sleep(pc.option.ConsumeTimeout)
+			pc.cleanExpiredMsg()
 
-				lockTicker := time.NewTicker(pc.option.RebalanceLockInterval)
-				defer lockTicker.Stop()
-				for {
-					select {
-					case <-lockTicker.C:
-						pc.lockAll()
-					case <-pc.done:
-						rlog.Info("push consumer close tick.", map[string]interface{}{
-							rlog.LogKeyConsumerGroup: pc.consumerGroup,
-						})
-						return
-					}
+			ticker := time.NewTicker(pc.option.ConsumeTimeout)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					pc.cleanExpiredMsg()
+				case <-pc.done:
+					rlog.Info("push consumer close cleanExpiredMsg listener.", map[string]interface{}{
+						rlog.LogKeyConsumerGroup: pc.consumerGroup,
+					})
+					return
 				}
-			})
-		} else {
-			go primitive.WithRecover(func() {
-				// start clean msg expired
-				ticker := time.NewTicker(pc.option.ConsumeTimeout)
-				defer ticker.Stop()
-				for {
-					select {
-					case <-ticker.C:
-						pc.cleanExpiredMsg()
-					case <-pc.done:
-						rlog.Info("push consumer close cleanExpiredMsg listener.", map[string]interface{}{
-							rlog.LogKeyConsumerGroup: pc.consumerGroup,
-						})
-						return
-					}
+			}
+		})
+
+		go primitive.WithRecover(func() {
+			// initial lock.
+			if !pc.consumeOrderly {
+				return
+			}
+
+			time.Sleep(1000 * time.Millisecond)
+			pc.lockAll()
+
+			lockTicker := time.NewTicker(pc.option.RebalanceLockInterval)
+			defer lockTicker.Stop()
+			for {
+				select {
+				case <-lockTicker.C:
+					pc.lockAll()
+				case <-pc.done:
+					rlog.Info("push consumer close tick.", map[string]interface{}{
+						rlog.LogKeyConsumerGroup: pc.consumerGroup,
+					})
+					return
 				}
-			})
-		}
+			}
+		})
 	})
 
 	if err != nil {
@@ -215,20 +238,44 @@ func (pc *pushConsumer) Start() error {
 	for k := range pc.subscribedTopic {
 		_, exist := pc.topicSubscribeInfoTable.Load(k)
 		if !exist {
-			pc.client.Shutdown()
+			pc.Shutdown()
 			return fmt.Errorf("the topic=%s route info not found, it may not exist", k)
 		}
 	}
 	pc.client.CheckClientInBroker()
 	pc.client.SendHeartbeatToAllBrokerWithLock()
-	pc.client.RebalanceImmediately()
+	go pc.client.RebalanceImmediately()
 
 	return err
+}
+
+func (pc *pushConsumer) GetOffsetDiffMap() map[string]int64 {
+	offsetDiffMap := make(map[string]int64)
+	pc.processQueueTable.Range(func(key, value interface{}) bool {
+		mq := key.(primitive.MessageQueue)
+		pq := value.(*processQueue)
+		topic := mq.Topic
+		consumerOffset, _ := pc.storage.readWithException(&mq, _ReadFromMemory)
+		maxOffset := pq.maxOffsetInQueue
+		if consumerOffset < 0 || maxOffset < 0 || consumerOffset > maxOffset {
+			return true
+		}
+		if _, ok := offsetDiffMap[topic]; !ok {
+			offsetDiffMap[topic] = 0
+		}
+		offsetDiff := offsetDiffMap[topic]
+		offsetDiffMap[topic] = offsetDiff + (maxOffset - consumerOffset)
+		return true
+	})
+	return offsetDiffMap
 }
 
 func (pc *pushConsumer) Shutdown() error {
 	var err error
 	pc.closeOnce.Do(func() {
+		if pc.option.TraceDispatcher != nil {
+			pc.option.TraceDispatcher.Close()
+		}
 		close(pc.done)
 		if pc.consumeOrderly && pc.model == Clustering {
 			pc.unlockAll(false)
@@ -249,6 +296,9 @@ func (pc *pushConsumer) Subscribe(topic string, selector MessageSelector,
 
 	if pc.option.Namespace != "" {
 		topic = pc.option.Namespace + "%" + topic
+	}
+	if _, ok := pc.crCh[topic]; !ok {
+		pc.crCh[topic] = make(chan struct{}, pc.defaultConsumer.option.ConsumeGoroutineNums)
 	}
 	data := buildSubscriptionData(topic, selector)
 	pc.subscriptionDataTable.Store(topic, data)
@@ -322,7 +372,7 @@ func (pc *pushConsumer) GetWhere() string {
 	case ConsumeFromTimestamp:
 		return "CONSUME_FROM_TIMESTAMP"
 	default:
-		return "UNKOWN"
+		return "UNKNOWN"
 	}
 
 }
@@ -355,7 +405,7 @@ func (pc *pushConsumer) ConsumeMessageDirectly(msg *primitive.MessageExt, broker
 
 	result, err = pc.consumeInner(ctx, msgs)
 
-	consumeRT := time.Since(beginTime)
+	consumeRT := time.Now().Sub(beginTime)
 
 	res := &internal.ConsumeMessageDirectlyResult{
 		Order:          false,
@@ -380,12 +430,21 @@ func (pc *pushConsumer) ConsumeMessageDirectly(msg *primitive.MessageExt, broker
 	return res
 }
 
+func (pc *pushConsumer) GetConsumerStatus(topic string) *internal.ConsumerStatus {
+	consumerStatus := internal.NewConsumerStatus()
+	mqOffsetMap := pc.storage.getMQOffsetMap(topic)
+	if mqOffsetMap != nil {
+		consumerStatus.MQOffsetMap = mqOffsetMap
+	}
+	return consumerStatus
+}
+
 func (pc *pushConsumer) GetConsumerRunningInfo(stack bool) *internal.ConsumerRunningInfo {
 	info := internal.NewConsumerRunningInfo()
 
 	pc.subscriptionDataTable.Range(func(key, value interface{}) bool {
 		topic := key.(string)
-		info.SubscriptionData[value.(*internal.SubscriptionData)] = struct{}{}
+		info.SubscriptionData[value.(*internal.SubscriptionData)] = true
 		status := internal.ConsumeStatus{
 			PullRT:            pc.stat.getPullRT(pc.consumerGroup, topic).avgpt,
 			PullTPS:           pc.stat.getPullTPS(pc.consumerGroup, topic).tps,
@@ -479,23 +538,27 @@ func (pc *pushConsumer) messageQueueChanged(topic string, mqAll, mqDivided []*pr
 	pc.client.SendHeartbeatToAllBrokerWithLock()
 }
 
-func (pc *pushConsumer) validate() {
-	internal.ValidateGroup(pc.consumerGroup)
+func (pc *pushConsumer) validate() error {
+	if err := internal.ValidateGroup(pc.consumerGroup); err != nil {
+		return err
+	}
 
 	if pc.consumerGroup == internal.DefaultConsumerGroup {
 		// TODO FQA
-		rlog.Error(fmt.Sprintf("consumerGroup can't equal [%s], please specify another one.", internal.DefaultConsumerGroup), nil)
+		return fmt.Errorf("consumerGroup can't equal [%s], please specify another one", internal.DefaultConsumerGroup)
 	}
 
 	if len(pc.subscribedTopic) == 0 {
-		rlog.Error("number of subscribed topics is 0.", nil)
+		rlog.Warning("not subscribe any topic yet", map[string]interface{}{
+			rlog.LogKeyConsumerGroup: pc.consumerGroup,
+		})
 	}
 
 	if pc.option.ConsumeConcurrentlyMaxSpan < 1 || pc.option.ConsumeConcurrentlyMaxSpan > 65535 {
 		if pc.option.ConsumeConcurrentlyMaxSpan == 0 {
 			pc.option.ConsumeConcurrentlyMaxSpan = 1000
 		} else {
-			rlog.Error("option.ConsumeConcurrentlyMaxSpan out of range [1, 65535]", nil)
+			return errors.New("option.ConsumeConcurrentlyMaxSpan out of range [1, 65535]")
 		}
 	}
 
@@ -503,7 +566,7 @@ func (pc *pushConsumer) validate() {
 		if pc.option.PullThresholdForQueue == 0 {
 			pc.option.PullThresholdForQueue = 1024
 		} else {
-			rlog.Error("option.PullThresholdForQueue out of range [1, 65535]", nil)
+			return errors.New("option.PullThresholdForQueue out of range [1, 65535]")
 		}
 	}
 
@@ -511,7 +574,7 @@ func (pc *pushConsumer) validate() {
 		if pc.option.PullThresholdForTopic == 0 {
 			pc.option.PullThresholdForTopic = 102400
 		} else {
-			rlog.Error("option.PullThresholdForTopic out of range [1, 6553500]", nil)
+			return errors.New("option.PullThresholdForTopic out of range [1, 6553500]")
 		}
 	}
 
@@ -519,7 +582,7 @@ func (pc *pushConsumer) validate() {
 		if pc.option.PullThresholdSizeForQueue == 0 {
 			pc.option.PullThresholdSizeForQueue = 512
 		} else {
-			rlog.Error("option.PullThresholdSizeForQueue out of range [1, 1024]", nil)
+			return errors.New("option.PullThresholdSizeForQueue out of range [1, 1024]")
 		}
 	}
 
@@ -527,19 +590,19 @@ func (pc *pushConsumer) validate() {
 		if pc.option.PullThresholdSizeForTopic == 0 {
 			pc.option.PullThresholdSizeForTopic = 51200
 		} else {
-			rlog.Error("option.PullThresholdSizeForTopic out of range [1, 102400]", nil)
+			return errors.New("option.PullThresholdSizeForTopic out of range [1, 102400]")
 		}
 	}
 
 	if pc.option.PullInterval < 0 || pc.option.PullInterval > 65535*time.Millisecond {
-		rlog.Error("option.PullInterval out of range [0, 65535]", nil)
+		return errors.New("option.PullInterval out of range [0, 65535]")
 	}
 
 	if pc.option.ConsumeMessageBatchMaxSize < 1 || pc.option.ConsumeMessageBatchMaxSize > 1024 {
 		if pc.option.ConsumeMessageBatchMaxSize == 0 {
 			pc.option.ConsumeMessageBatchMaxSize = 1
 		} else {
-			rlog.Error("option.ConsumeMessageBatchMaxSize out of range [1, 1024]", nil)
+			return errors.New("option.ConsumeMessageBatchMaxSize out of range [1, 1024]")
 		}
 	}
 
@@ -547,9 +610,18 @@ func (pc *pushConsumer) validate() {
 		if pc.option.PullBatchSize == 0 {
 			pc.option.PullBatchSize = 32
 		} else {
-			rlog.Error("option.PullBatchSize out of range [1, 1024]", nil)
+			return errors.New("option.PullBatchSize out of range [1, 1024]")
 		}
 	}
+
+	if pc.option.ConsumeGoroutineNums < 1 || pc.option.ConsumeGoroutineNums > 100000 {
+		if pc.option.ConsumeGoroutineNums == 0 {
+			pc.option.ConsumeGoroutineNums = 20
+		} else {
+			return errors.New("option.ConsumeGoroutineNums out of range [1, 100000]")
+		}
+	}
+	return nil
 }
 
 func (pc *pushConsumer) pullMessage(request *PullRequest) {
@@ -568,7 +640,7 @@ func (pc *pushConsumer) pullMessage(request *PullRequest) {
 				return
 			default:
 				pc.submitToConsume(request.pq, request.mq)
-				if request.pq.IsDropped() {
+				if request.pq.IsDroppd() {
 					rlog.Info("push consumer quit pullMessage for dropped queue.", map[string]interface{}{
 						rlog.LogKeyConsumerGroup: pc.consumerGroup,
 					})
@@ -589,7 +661,7 @@ func (pc *pushConsumer) pullMessage(request *PullRequest) {
 		default:
 		}
 
-		if pq.IsDropped() {
+		if pq.IsDroppd() {
 			rlog.Debug("the request was dropped, so stop task", map[string]interface{}{
 				rlog.LogKeyPullRequest: request.String(),
 			})
@@ -601,7 +673,7 @@ func (pc *pushConsumer) pullMessage(request *PullRequest) {
 		}
 		// reset time
 		sleepTime = pc.option.PullInterval
-		pq.UpdateLastPullTime()
+		pq.lastPullTime.Store(time.Now())
 		err := pc.makeSureStateOK()
 		if err != nil {
 			rlog.Warning("consumer state error", map[string]interface{}{
@@ -735,16 +807,16 @@ func (pc *pushConsumer) pullMessage(request *PullRequest) {
 		sysFlag := buildSysFlag(commitOffsetEnable, true, subExpression != "", classFilter)
 
 		pullRequest := &internal.PullMessageRequestHeader{
-			ConsumerGroup:  pc.consumerGroup,
-			Topic:          request.mq.Topic,
-			QueueId:        int32(request.mq.QueueId),
-			QueueOffset:    request.nextOffset,
-			MaxMsgNums:     pc.option.PullBatchSize,
-			SysFlag:        sysFlag,
-			CommitOffset:   commitOffsetValue,
-			SubExpression:  subExpression,
-			ExpressionType: sd.ExpType,
-			SuspendTimeout: 20 * time.Second,
+			ConsumerGroup:        pc.consumerGroup,
+			Topic:                request.mq.Topic,
+			QueueId:              int32(request.mq.QueueId),
+			QueueOffset:          request.nextOffset,
+			MaxMsgNums:           pc.option.PullBatchSize,
+			SysFlag:              sysFlag,
+			CommitOffset:         commitOffsetValue,
+			SubExpression:        subExpression,
+			ExpressionType:       string(TAG),
+			SuspendTimeoutMillis: 20 * time.Second,
 		}
 		//
 		//if data.ExpType == string(TAG) {
@@ -785,6 +857,9 @@ func (pc *pushConsumer) pullMessage(request *PullRequest) {
 		}
 
 		pc.processPullResult(request.mq, result, sd)
+		if result.MaxOffset > pq.maxOffsetInQueue {
+			pq.maxOffsetInQueue = result.MaxOffset
+		}
 
 		switch result.Status {
 		case primitive.PullFound:
@@ -792,7 +867,7 @@ func (pc *pushConsumer) pullMessage(request *PullRequest) {
 			prevRequestOffset := request.nextOffset
 			request.nextOffset = result.NextBeginOffset
 
-			rt := time.Since(beginTime) / time.Millisecond
+			rt := time.Now().Sub(beginTime) / time.Millisecond
 			pc.stat.increasePullRT(pc.consumerGroup, request.mq.Topic, int64(rt))
 
 			msgFounded := result.GetMessageExts()
@@ -845,7 +920,10 @@ func (pc *pushConsumer) sendMessageBack(brokerName string, msg *primitive.Messag
 		brokerAddr = msg.StoreHost
 	}
 	_, err := pc.client.InvokeSync(context.Background(), brokerAddr, pc.buildSendBackRequest(msg, delayLevel), 3*time.Second)
-	return err == nil
+	if err != nil {
+		return false
+	}
+	return true
 }
 
 func (pc *pushConsumer) buildSendBackRequest(msg *primitive.MessageExt, delayLevel int) *remote.RemotingCommand {
@@ -929,13 +1007,13 @@ func (pc *pushConsumer) ResetOffset(topic string, table map[primitive.MessageQue
 	}
 }
 
-func (pc *pushConsumer) removeUnnecessaryMessageQueue(mq *primitive.MessageQueue, pq *processQueue) {
+func (pc *pushConsumer) removeUnnecessaryMessageQueue(mq *primitive.MessageQueue, pq *processQueue) bool {
 	pc.defaultConsumer.removeUnnecessaryMessageQueue(mq, pq)
+	if !pc.consumeOrderly || Clustering != pc.model {
+		return true
+	}
 	// TODO orderly
-	// if !pc.consumeOrderly || Clustering != pc.model {
-	// 	return true
-	// }
-	// return true
+	return true
 }
 
 func (pc *pushConsumer) consumeInner(ctx context.Context, subMsgs []*primitive.MessageExt) (ConsumeResult, error) {
@@ -989,7 +1067,7 @@ func (pc *pushConsumer) resetRetryAndNamespace(subMsgs []*primitive.MessageExt) 
 	for idx := range subMsgs {
 		msg := subMsgs[idx]
 		retryTopic := msg.GetProperty(primitive.PropertyRetryTopic)
-		if retryTopic == "" && groupTopic == msg.Topic {
+		if retryTopic != "" && groupTopic == msg.Topic {
 			msg.Topic = retryTopic
 		}
 		subMsgs[idx].WithProperty(primitive.PropertyConsumeStartTime, strconv.FormatInt(
@@ -997,11 +1075,18 @@ func (pc *pushConsumer) resetRetryAndNamespace(subMsgs []*primitive.MessageExt) 
 	}
 }
 
-func (pc *pushConsumer) consumeMessageCurrently(pq *processQueue, mq *primitive.MessageQueue) {
+func (pc *pushConsumer) consumeMessageConcurrently(pq *processQueue, mq *primitive.MessageQueue) {
 	msgs := pq.getMessages()
 	if msgs == nil {
 		return
 	}
+
+	limiter := pc.option.Limiter
+	limiterOn := limiter != nil
+	if _, ok := pc.crCh[mq.Topic]; !ok {
+		pc.crCh[mq.Topic] = make(chan struct{}, pc.defaultConsumer.option.ConsumeGoroutineNums)
+	}
+
 	for count := 0; count < len(msgs); count++ {
 		var subMsgs []*primitive.MessageExt
 		if count+pc.option.ConsumeMessageBatchMaxSize > len(msgs) {
@@ -1012,9 +1097,24 @@ func (pc *pushConsumer) consumeMessageCurrently(pq *processQueue, mq *primitive.
 			subMsgs = msgs[count:next]
 			count = next - 1
 		}
+
+		if limiterOn {
+			limiter(utils.WithoutNamespace(mq.Topic))
+		}
+		pc.crCh[mq.Topic] <- struct{}{}
+
 		go primitive.WithRecover(func() {
+			defer func() {
+				if err := recover(); err != nil {
+					rlog.Error("consumeMessageConcurrently panic", map[string]interface{}{
+						rlog.LogKeyUnderlayError: err,
+						rlog.LogKeyConsumerGroup: pc.consumerGroup,
+					})
+				}
+				<-pc.crCh[mq.Topic]
+			}()
 		RETRY:
-			if pq.IsDropped() {
+			if pq.IsDroppd() {
 				rlog.Info("the message queue not be able to consume, because it was dropped", map[string]interface{}{
 					rlog.LogKeyMessageQueue:  mq.String(),
 					rlog.LogKeyConsumerGroup: pc.consumerGroup,
@@ -1042,10 +1142,21 @@ func (pc *pushConsumer) consumeMessageCurrently(pq *processQueue, mq *primitive.
 
 			result, err = pc.consumeInner(ctx, subMsgs)
 
-			consumeRT := time.Since(beginTime)
+			consumeRT := time.Now().Sub(beginTime)
 			if err != nil {
+				rlog.Warning("consumeMessageCurrently error", map[string]interface{}{
+					rlog.LogKeyUnderlayError: err,
+					rlog.LogKeyMessages:      msgs,
+					rlog.LogKeyMessageQueue:  mq,
+					rlog.LogKeyConsumerGroup: pc.consumerGroup,
+				})
 				msgCtx.Properties[primitive.PropCtxType] = string(primitive.ExceptionReturn)
 			} else if consumeRT >= pc.option.ConsumeTimeout {
+				rlog.Warning("consumeMessageCurrently time out", map[string]interface{}{
+					rlog.LogKeyMessages:      msgs,
+					rlog.LogKeyMessageQueue:  mq,
+					rlog.LogKeyConsumerGroup: pc.consumerGroup,
+				})
 				msgCtx.Properties[primitive.PropCtxType] = string(primitive.TimeoutReturn)
 			} else if result == ConsumeSuccess {
 				msgCtx.Properties[primitive.PropCtxType] = string(primitive.SuccessReturn)
@@ -1055,7 +1166,7 @@ func (pc *pushConsumer) consumeMessageCurrently(pq *processQueue, mq *primitive.
 
 			pc.stat.increaseConsumeRT(pc.consumerGroup, mq.Topic, int64(consumeRT/time.Millisecond))
 
-			if !pq.IsDropped() {
+			if !pq.IsDroppd() {
 				msgBackFailed := make([]*primitive.MessageExt, 0)
 				msgBackSucceed := make([]*primitive.MessageExt, 0)
 				if result == ConsumeSuccess {
@@ -1084,7 +1195,7 @@ func (pc *pushConsumer) consumeMessageCurrently(pq *processQueue, mq *primitive.
 
 				offset := pq.removeMessage(msgBackSucceed...)
 
-				if offset >= 0 && !pq.IsDropped() {
+				if offset >= 0 && !pq.IsDroppd() {
 					pc.storage.update(mq, int64(offset), true)
 				}
 				if len(msgBackFailed) > 0 {
@@ -1103,7 +1214,7 @@ func (pc *pushConsumer) consumeMessageCurrently(pq *processQueue, mq *primitive.
 }
 
 func (pc *pushConsumer) consumeMessageOrderly(pq *processQueue, mq *primitive.MessageQueue) {
-	if pq.IsDropped() {
+	if pq.IsDroppd() {
 		rlog.Warning("the message queue not be able to consume, because it's dropped.", map[string]interface{}{
 			rlog.LogKeyMessageQueue: mq.String(),
 		})
@@ -1118,7 +1229,7 @@ func (pc *pushConsumer) consumeMessageOrderly(pq *processQueue, mq *primitive.Me
 
 		continueConsume := true
 		for continueConsume {
-			if pq.IsDropped() {
+			if pq.IsDroppd() {
 				rlog.Warning("the message queue not be able to consume, because it's dropped.", map[string]interface{}{
 					rlog.LogKeyMessageQueue: mq.String(),
 				})
@@ -1140,7 +1251,7 @@ func (pc *pushConsumer) consumeMessageOrderly(pq *processQueue, mq *primitive.Me
 					return
 				}
 			}
-			interval := time.Since(beginTime)
+			interval := time.Now().Sub(beginTime)
 			if interval > pc.option.MaxTimeConsumeContinuously {
 				time.Sleep(10 * time.Millisecond)
 				return
@@ -1173,7 +1284,15 @@ func (pc *pushConsumer) consumeMessageOrderly(pq *processQueue, mq *primitive.Me
 			ctx = primitive.WithOrderlyCtx(ctx, orderlyCtx)
 
 			pq.lockConsume.Lock()
-			result, _ := pc.consumeInner(ctx, msgs)
+			result, err := pc.consumeInner(ctx, msgs)
+			if err != nil {
+				rlog.Warning("consumeMessage orderly error", map[string]interface{}{
+					rlog.LogKeyUnderlayError: err,
+					rlog.LogKeyMessages:      msgs,
+					rlog.LogKeyMessageQueue:  mq.String(),
+					rlog.LogKeyConsumerGroup: pc.consumerGroup,
+				})
+			}
 			pq.lockConsume.Unlock()
 
 			if result == Rollback || result == SuspendCurrentQueueAMoment {
@@ -1185,7 +1304,7 @@ func (pc *pushConsumer) consumeMessageOrderly(pq *processQueue, mq *primitive.Me
 			}
 
 			// just put consumeResult in consumerMessageCtx
-			//interval = time.Since(beginTime)
+			//interval = time.Now().Sub(beginTime)
 			//consumeReult := SuccessReturn
 			//if interval > pc.option.ConsumeTimeout {
 			//	consumeReult = TimeoutReturn
@@ -1232,12 +1351,12 @@ func (pc *pushConsumer) consumeMessageOrderly(pq *processQueue, mq *primitive.Me
 				default:
 				}
 			}
-			if commitOffset > 0 && !pq.IsDropped() {
+			if commitOffset > 0 && !pq.IsDroppd() {
 				_ = pc.updateOffset(mq, commitOffset)
 			}
 		}
 	} else {
-		if pq.IsDropped() {
+		if pq.IsDroppd() {
 			rlog.Warning("the message queue not be able to consume, because it's dropped.", map[string]interface{}{
 				rlog.LogKeyMessageQueue: mq.String(),
 			})
@@ -1285,7 +1404,7 @@ func (pc *pushConsumer) getMaxReconsumeTimes() int32 {
 
 func (pc *pushConsumer) tryLockLaterAndReconsume(mq *primitive.MessageQueue, delay int64) {
 	time.Sleep(time.Duration(delay) * time.Millisecond)
-	if pc.lock(mq) {
+	if pc.lock(mq) == true {
 		pc.submitConsumeRequestLater(10)
 	} else {
 		pc.submitConsumeRequestLater(3000)
@@ -1294,7 +1413,7 @@ func (pc *pushConsumer) tryLockLaterAndReconsume(mq *primitive.MessageQueue, del
 
 func (pc *pushConsumer) submitConsumeRequestLater(suspendTimeMillis int64) {
 	if suspendTimeMillis == -1 {
-		suspendTimeMillis = int64(pc.option.SuspendCurrentQueueTime / time.Millisecond)
+		suspendTimeMillis = int64(pc.option.SuspendCurrentQueueTimeMillis / time.Millisecond)
 	}
 	if suspendTimeMillis < 10 {
 		suspendTimeMillis = 10

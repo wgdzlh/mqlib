@@ -182,8 +182,7 @@ func (m *Message) WithTag(tags string) *Message {
 }
 
 func (m *Message) WithKeys(keys []string) *Message {
-	s := strings.Join(keys, PropertyKeySeparator)
-	m.WithProperty(PropertyKeys, s)
+	m.WithProperty(PropertyKeys, strings.Join(keys, PropertyKeySeparator))
 	return m
 }
 

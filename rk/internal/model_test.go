@@ -45,7 +45,7 @@ func TestHeartbeatData(t *testing.T) {
 			set.Add(pData)
 			set.Add(pData2)
 
-			v, err := set.MarshalJSON()
+			v, err := json.Marshal(set)
 			So(err, ShouldBeNil)
 			rlog.Info("Json Producer", map[string]interface{}{
 				"result": string(v),
@@ -155,8 +155,8 @@ func TestConsumerRunningInfo_MarshalJSON(t *testing.T) {
 			"subscription":                  "{}",
 			"PROP_CONSUMEORDERLY":           "false",
 		}
-		subData := map[*SubscriptionData]struct{}{
-			{
+		subData := map[*SubscriptionData]bool{
+			&SubscriptionData{
 				ClassFilterMode: false,
 				Codes:           utils.NewSet(),
 				ExpType:         "TAG",
@@ -164,8 +164,8 @@ func TestConsumerRunningInfo_MarshalJSON(t *testing.T) {
 				SubVersion:      1574791579242,
 				Tags:            utils.NewSet(),
 				Topic:           "%RETRY%mq-client-go-test%GID_GO_TEST",
-			}: {},
-			{
+			}: true,
+			&SubscriptionData{
 				ClassFilterMode: true,
 				Codes:           utils.NewSet(),
 				ExpType:         "TAG",
@@ -173,7 +173,7 @@ func TestConsumerRunningInfo_MarshalJSON(t *testing.T) {
 				SubVersion:      1574791577523,
 				Tags:            utils.NewSet(),
 				Topic:           "mq-client-go-test%go-test",
-			}: {},
+			}: true,
 		}
 		statusTable := map[string]ConsumeStatus{
 			"%RETRY%mq-client-go-test%GID_GO_TEST": {

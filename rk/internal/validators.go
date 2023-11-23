@@ -18,24 +18,29 @@ limitations under the License.
 package internal
 
 import (
-	"github.com/wgdzlh/mqlib/rk/rlog"
+	"errors"
+	"fmt"
+	"regexp"
 )
 
 const (
-	// _ValidPattern       = "^[%|a-zA-Z0-9_-]+$"
+	_ValidPattern       = "^[%|a-zA-Z0-9_-]+$"
 	_CharacterMaxLength = 255
 )
 
-// var (
-// 	_Pattern, _ = regexp.Compile(_ValidPattern)
-// )
+var (
+	_Pattern = regexp.MustCompile(_ValidPattern)
+)
 
-func ValidateGroup(group string) {
+func ValidateGroup(group string) error {
 	if group == "" {
-		rlog.Fatal("consumerGroup is empty", nil)
+		return errors.New("consumerGroup is empty")
 	}
-
 	if len(group) > _CharacterMaxLength {
-		rlog.Fatal("the specified group is longer than group max length 255.", nil)
+		return errors.New("the specified group is longer than group max length 255")
 	}
+	if !_Pattern.MatchString(group) {
+		return fmt.Errorf("the specified group[%s] contains illegal characters, allowing only %s", group, _ValidPattern)
+	}
+	return nil
 }

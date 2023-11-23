@@ -20,10 +20,11 @@ package utils
 import (
 	"bytes"
 	"fmt"
-	"github.com/wgdzlh/mqlib/rk/errors"
 	"net"
 	"strconv"
 	"time"
+
+	"github.com/wgdzlh/mqlib/rk/errors"
 )
 
 var (
