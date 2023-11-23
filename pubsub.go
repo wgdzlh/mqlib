@@ -21,6 +21,8 @@ const (
 	DEFAULT_RETRY = 3
 	tagSep        = "||"
 
+	RETRY_PREFIX = "%RETRY%"
+
 	MSG_IDS_CACHE_EX = time.Hour * 2
 )
 
@@ -128,8 +130,11 @@ func (c *Consumer) getRealCallback(sc SubCallback) realCallback {
 	return func(ctx context.Context, me ...*primitive.MessageExt) (ret consumer.ConsumeResult, err error) {
 		var exist bool
 		for _, m := range me {
-			if _, exist = c.msgIds.Get(m.MsgId); exist {
-				continue
+			if !strings.HasPrefix(m.Topic, RETRY_PREFIX) {
+				if _, exist = c.msgIds.Get(m.MsgId); exist {
+					// 过滤掉重复的（非重试）消息
+					continue
+				}
 			}
 			if err = sc(msgFromRkMsgExt(m)); err != nil {
 				ret = consumer.ConsumeRetryLater
