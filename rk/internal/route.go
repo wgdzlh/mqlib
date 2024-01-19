@@ -115,10 +115,7 @@ func (s *namesrvs) UpdateTopicRouteInfo(topic string) (*TopicRouteData, bool, er
 
 func (s *namesrvs) CheckTopicRouteHasTopic(topic string) bool {
 	_, err := s.queryTopicRouteInfoFromServer(topic)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func (s *namesrvs) UpdateTopicRouteInfoWithDefault(topic string, defaultTopic string, defaultQueueNum int) (*TopicRouteData, bool, error) {
@@ -553,16 +550,14 @@ func (routeData *TopicRouteData) decode(data string) error {
 		}
 		addrs := v.Get("brokerAddrs").String()
 		strs := strings.Split(addrs[1:len(addrs)-1], ",")
-		if strs != nil {
-			for _, str := range strs {
-				i := strings.Index(str, ":")
-				if i < 0 {
-					continue
-				}
-				brokerId := strings.ReplaceAll(str[0:i], "\"", "")
-				id, _ := strconv.ParseInt(brokerId, 10, 64)
-				bd.BrokerAddresses[id] = strings.Replace(str[i+1:], "\"", "", -1)
+		for _, str := range strs {
+			i := strings.Index(str, ":")
+			if i < 0 {
+				continue
 			}
+			brokerId := strings.ReplaceAll(str[0:i], "\"", "")
+			id, _ := strconv.ParseInt(brokerId, 10, 64)
+			bd.BrokerAddresses[id] = strings.Replace(str[i+1:], "\"", "", -1)
 		}
 		routeData.BrokerDataList[idx] = bd
 	}
@@ -572,18 +567,9 @@ func (routeData *TopicRouteData) decode(data string) error {
 func (routeData *TopicRouteData) clone() *TopicRouteData {
 	cloned := &TopicRouteData{
 		OrderTopicConf: routeData.OrderTopicConf,
-		QueueDataList:  make([]*QueueData, len(routeData.QueueDataList)),
-		BrokerDataList: make([]*BrokerData, len(routeData.BrokerDataList)),
+		QueueDataList:  append([]*QueueData(nil), routeData.QueueDataList...),
+		BrokerDataList: append([]*BrokerData(nil), routeData.BrokerDataList...),
 	}
-
-	for index, value := range routeData.QueueDataList {
-		cloned.QueueDataList[index] = value
-	}
-
-	for index, value := range routeData.BrokerDataList {
-		cloned.BrokerDataList[index] = value
-	}
-
 	return cloned
 }
 

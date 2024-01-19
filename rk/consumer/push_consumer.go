@@ -405,7 +405,7 @@ func (pc *pushConsumer) ConsumeMessageDirectly(msg *primitive.MessageExt, broker
 
 	result, err = pc.consumeInner(ctx, msgs)
 
-	consumeRT := time.Now().Sub(beginTime)
+	consumeRT := time.Since(beginTime)
 
 	res := &internal.ConsumeMessageDirectlyResult{
 		Order:          false,
@@ -867,7 +867,7 @@ func (pc *pushConsumer) pullMessage(request *PullRequest) {
 			prevRequestOffset := request.nextOffset
 			request.nextOffset = result.NextBeginOffset
 
-			rt := time.Now().Sub(beginTime) / time.Millisecond
+			rt := time.Since(beginTime) / time.Millisecond
 			pc.stat.increasePullRT(pc.consumerGroup, request.mq.Topic, int64(rt))
 
 			msgFounded := result.GetMessageExts()
@@ -920,10 +920,7 @@ func (pc *pushConsumer) sendMessageBack(brokerName string, msg *primitive.Messag
 		brokerAddr = msg.StoreHost
 	}
 	_, err := pc.client.InvokeSync(context.Background(), brokerAddr, pc.buildSendBackRequest(msg, delayLevel), 3*time.Second)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func (pc *pushConsumer) buildSendBackRequest(msg *primitive.MessageExt, delayLevel int) *remote.RemotingCommand {
@@ -1142,7 +1139,7 @@ func (pc *pushConsumer) consumeMessageConcurrently(pq *processQueue, mq *primiti
 
 			result, err = pc.consumeInner(ctx, subMsgs)
 
-			consumeRT := time.Now().Sub(beginTime)
+			consumeRT := time.Since(beginTime)
 			if err != nil {
 				rlog.Warning("consumeMessageCurrently error", map[string]interface{}{
 					rlog.LogKeyUnderlayError: err,
@@ -1251,7 +1248,7 @@ func (pc *pushConsumer) consumeMessageOrderly(pq *processQueue, mq *primitive.Me
 					return
 				}
 			}
-			interval := time.Now().Sub(beginTime)
+			interval := time.Since(beginTime)
 			if interval > pc.option.MaxTimeConsumeContinuously {
 				time.Sleep(10 * time.Millisecond)
 				return
@@ -1304,7 +1301,7 @@ func (pc *pushConsumer) consumeMessageOrderly(pq *processQueue, mq *primitive.Me
 			}
 
 			// just put consumeResult in consumerMessageCtx
-			//interval = time.Now().Sub(beginTime)
+			//interval = time.Since(beginTime)
 			//consumeReult := SuccessReturn
 			//if interval > pc.option.ConsumeTimeout {
 			//	consumeReult = TimeoutReturn
@@ -1404,7 +1401,7 @@ func (pc *pushConsumer) getMaxReconsumeTimes() int32 {
 
 func (pc *pushConsumer) tryLockLaterAndReconsume(mq *primitive.MessageQueue, delay int64) {
 	time.Sleep(time.Duration(delay) * time.Millisecond)
-	if pc.lock(mq) == true {
+	if pc.lock(mq) {
 		pc.submitConsumeRequestLater(10)
 	} else {
 		pc.submitConsumeRequestLater(3000)

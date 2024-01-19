@@ -54,6 +54,7 @@ func TestStart(t *testing.T) {
 			})
 			return ConsumeSuccess, nil
 		})
+		t.Log(err)
 
 		_, exists := c.subscriptionDataTable.Load("TopicTest")
 		So(exists, ShouldBeTrue)

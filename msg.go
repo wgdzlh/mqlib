@@ -8,6 +8,7 @@ import (
 )
 
 type Message struct {
+	Id        string                `json:"id,omitempty"`         // 消息ID
 	RemoteApp string                `json:"remote_app,omitempty"` // RPC调用服务端应用名称
 	Topic     string                `json:"topic,omitempty"`      // 消息主题（可选）
 	Tag       string                `json:"tag"`                  // RPC调用接口名称
@@ -35,6 +36,7 @@ func msgFromRkMsg(m *primitive.Message) *Message {
 
 func msgFromRkMsgExt(me *primitive.MessageExt) *Message {
 	return &Message{
+		Id:     me.MsgId,
 		Topic:  me.Topic,
 		Tag:    me.GetTags(),
 		Keys:   getKeysFromMsg(&me.Message),

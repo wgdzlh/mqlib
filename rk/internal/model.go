@@ -204,7 +204,7 @@ func (info ConsumerRunningInfo) Encode() ([]byte, error) {
 		sub1 := subs[i]
 		sub2 := subs[j]
 		if sub1.ClassFilterMode != sub2.ClassFilterMode {
-			return sub1.ClassFilterMode == false
+			return !sub1.ClassFilterMode
 		}
 		com := strings.Compare(sub1.Topic, sub1.Topic)
 		if com != 0 {
@@ -275,7 +275,7 @@ func (info ConsumerRunningInfo) Encode() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		dataV, err := json.Marshal(info.MQTable[keys[idx]])
+		dataV, _ := json.Marshal(info.MQTable[keys[idx]])
 		tableJson = fmt.Sprintf("%s,%s:%s", tableJson, string(dataK), string(dataV))
 	}
 	tableJson = strings.TrimLeft(tableJson, ",")
@@ -329,7 +329,7 @@ func (status ConsumerStatus) Encode() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		dataV, err := json.Marshal(status.MQOffsetMap[keys[idx]])
+		dataV, _ := json.Marshal(status.MQOffsetMap[keys[idx]])
 		mapJson = fmt.Sprintf("%s,%s:%s", mapJson, string(dataK), string(dataV))
 	}
 	mapJson = strings.TrimLeft(mapJson, ",")
@@ -468,7 +468,7 @@ func parseFastJsonFormat(body []byte) map[primitive.MessageQueue]int64 {
 
 		var err error
 		// ignore err for now
-		offset, err := strconv.Atoi(tuple[1])
+		offset, _ := strconv.Atoi(tuple[1])
 
 		var queue primitive.MessageQueue
 		err = json.Unmarshal([]byte(queueStr), &queue)

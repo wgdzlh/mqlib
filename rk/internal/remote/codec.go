@@ -133,7 +133,7 @@ var (
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 // + len  |   4bytes   |     4bytes    | (21 + r_len + e_len) bytes | remain bytes +
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-func (command *RemotingCommand) WriteTo(w io.Writer) error {
+func (command *RemotingCommand) DumpTo(w io.Writer) error {
 	var (
 		header []byte
 		err    error
@@ -385,7 +385,7 @@ func (c *rmqCodec) encodeHeader(command *RemotingCommand) ([]byte, error) {
 }
 
 func (c *rmqCodec) encodeMaps(maps map[string]string) ([]byte, error) {
-	if maps == nil || len(maps) == 0 {
+	if len(maps) == 0 {
 		return []byte{}, nil
 	}
 	extFieldsBuf := bytes.NewBuffer([]byte{})

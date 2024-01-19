@@ -282,6 +282,7 @@ func NewTraceDispatcher(traceCfg *primitive.TraceConfig) *traceDispatcher {
 	cliOp.Credentials = traceCfg.Credentials
 	cli := GetOrNewRocketMQClient(cliOp, nil)
 	if cli == nil {
+		cancel()
 		return nil
 	}
 	cliOp.Namesrv = cli.GetNameSrv()
@@ -373,7 +374,6 @@ func (td *traceDispatcher) process(maxWaitTime int64) {
 			go primitive.WithRecover(func() {
 				td.batchCommit(batchSend)
 			})
-			batch = make([]TraceContext, 0)
 
 			now := time.Now().UnixNano() / int64(time.Millisecond)
 			end := now + 500
@@ -420,7 +420,7 @@ type Keyset map[string]struct{}
 
 func (ks Keyset) slice() []string {
 	slice := make([]string, len(ks))
-	for k, _ := range ks {
+	for k := range ks {
 		slice = append(slice, k)
 	}
 	return slice

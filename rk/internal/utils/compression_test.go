@@ -28,7 +28,7 @@ import (
 
 func TestUnCompress(t *testing.T) {
 	var b bytes.Buffer
-	var oriStr string = "hello, go"
+	var oriStr = "hello, go"
 	zr := zlib.NewWriter(&b)
 	zr.Write([]byte(oriStr))
 	zr.Close()
