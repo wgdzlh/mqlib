@@ -29,6 +29,7 @@ type PubClient interface {
 type SubClient interface {
 	baseClient
 	GetSub() *Consumer
+	SetDeDup(bool)
 }
 
 type RpcSrvClient interface {

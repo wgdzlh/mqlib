@@ -76,6 +76,7 @@ type Consumer struct {
 	rkc       rocketmq.PushConsumer
 	msgIds    *cache.Cache
 	started   bool
+	deDup     bool
 }
 
 func NewConsumer(gpName, nsName string, broadcast bool, topics ...Topic) (c *Consumer, err error) {
@@ -83,6 +84,7 @@ func NewConsumer(gpName, nsName string, broadcast bool, topics ...Topic) (c *Con
 		GroupName: gpName,
 		subMap:    map[string]*subData{},
 		msgIds:    cache.New(MSG_IDS_CACHE_EX, MSG_IDS_CACHE_EX*2),
+		deDup:     true,
 	}
 	consumerModel := consumer.Clustering
 	unitName := ""
@@ -124,18 +126,26 @@ func NewConsumer(gpName, nsName string, broadcast bool, topics ...Topic) (c *Con
 	return
 }
 
+func (c *Consumer) SetDeDup(on bool) {
+	c.deDup = on
+}
+
 func (c *Consumer) getRealCallback(sc SubCallback) realCallback {
 	return func(ctx context.Context, me ...*primitive.MessageExt) (ret consumer.ConsumeResult, err error) {
 		var exist bool
 		for _, m := range me {
-			if _, exist = c.msgIds.Get(m.MsgId); exist {
-				continue
+			if c.deDup {
+				if _, exist = c.msgIds.Get(m.MsgId); exist {
+					continue
+				}
 			}
 			if err = sc(msgFromRkMsgExt(m)); err != nil {
 				ret = consumer.ConsumeRetryLater
 				return
 			}
-			c.msgIds.SetDefault(m.MsgId, struct{}{})
+			if c.deDup {
+				c.msgIds.SetDefault(m.MsgId, struct{}{})
+			}
 		}
 		return consumer.ConsumeSuccess, nil
 	}

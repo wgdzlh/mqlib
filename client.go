@@ -137,6 +137,12 @@ func newClient(nameServer, app string, ttl ...time.Duration) (c *client, err err
 	return
 }
 
+func (c *client) SetDeDup(on bool) {
+	if c.sub != nil {
+		c.sub.SetDeDup(on)
+	}
+}
+
 func (c *client) GetPub() *Producer {
 	return c.pub
 }
