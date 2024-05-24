@@ -4,7 +4,8 @@ import (
 	"context"
 
 	"github.com/wgdzlh/mqlib/log"
-	"github.com/wgdzlh/mqlib/rk/primitive"
+
+	"github.com/apache/rocketmq-client-go/v2/primitive"
 	"go.uber.org/zap"
 )
 

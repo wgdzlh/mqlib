@@ -3,8 +3,8 @@ package mqlib
 import (
 	"strings"
 
-	jsoniter "github.com/json-iterator/go"
-	"github.com/wgdzlh/mqlib/rk/primitive"
+	"github.com/apache/rocketmq-client-go/v2/primitive"
+	json "github.com/json-iterator/go"
 )
 
 type Message struct {
@@ -18,7 +18,7 @@ type Message struct {
 }
 
 func (m *Message) ToString() string {
-	out, _ := jsoniter.MarshalToString(m)
+	out, _ := json.MarshalToString(m)
 	return out
 }
 
