@@ -132,19 +132,18 @@ func (c *Consumer) SetDeDup(on bool) {
 
 func (c *Consumer) getRealCallback(sc SubCallback) realCallback {
 	return func(ctx context.Context, me ...*primitive.MessageExt) (ret consumer.ConsumeResult, err error) {
-		var exist bool
 		for _, m := range me {
 			if c.deDup {
-				if _, exist = c.msgIds.Get(m.MsgId); exist {
+				if c.msgIds.Add(m.MsgId, nil, cache.DefaultExpiration) != nil {
 					continue
 				}
 			}
 			if err = sc(msgFromRkMsgExt(m)); err != nil {
+				if c.deDup {
+					c.msgIds.Delete(m.MsgId)
+				}
 				ret = consumer.ConsumeRetryLater
 				return
-			}
-			if c.deDup {
-				c.msgIds.SetDefault(m.MsgId, struct{}{})
 			}
 		}
 		return consumer.ConsumeSuccess, nil
