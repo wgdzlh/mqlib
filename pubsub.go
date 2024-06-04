@@ -104,23 +104,18 @@ func NewConsumer(gpName, nsName string, broadcast bool, topics ...Topic) (c *Con
 		log.Error("init rocketmq consumer failed", zap.Error(err))
 		return
 	}
+	topicNames := make([]string, len(topics))
+	for i := range topics {
+		topicNames[i] = topics[i].Name
+	}
+	CreateTopic(nsName, topicNames...)
 	if err = c.subscribe(topics); err != nil {
 		log.Error("subscribe failed", zap.Error(err))
 		return
 	}
 	if err = c.rkc.Start(); err != nil {
-		if strings.HasSuffix(err.Error(), "not exist") {
-			topicNames := make([]string, len(topics))
-			for i := range topics {
-				topicNames[i] = topics[i].Name
-			}
-			if CreateTopic(nsName, topicNames...) == nil {
-				err = c.rkc.Start()
-			}
-		}
-		if err != nil {
-			log.Error("start rocketmq consumer failed", zap.Error(err))
-		}
+		log.Error("start rocketmq consumer failed", zap.Error(err))
+		return
 	}
 	c.started = true
 	return

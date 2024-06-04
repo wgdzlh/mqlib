@@ -20,7 +20,7 @@ func CreateTopic(nsName string, topics ...string) (err error) {
 	if realBrokerAddr := os.Getenv(BROKER_ADDR_ENV); realBrokerAddr != "" {
 		brokerAddr = realBrokerAddr
 	}
-	log.Info("creating new topic", zap.String("brokerAddr", brokerAddr), zap.Any("topics", topics))
+	log.Info("creating topics if not exist", zap.String("brokerAddr", brokerAddr), zap.Any("topics", topics))
 	mqAdmin, err := admin.NewAdmin(
 		admin.WithResolver(primitive.NewPassthroughResolver([]string{nsName})),
 	)
@@ -33,9 +33,11 @@ func CreateTopic(nsName string, topics ...string) (err error) {
 		if err = mqAdmin.CreateTopic(
 			context.Background(),
 			admin.WithTopicCreate(topic),
+			admin.WithReadQueueNums(4),
+			admin.WithWriteQueueNums(4),
 			admin.WithBrokerAddrCreate(brokerAddr),
 		); err != nil {
-			log.Error("create new topic failed", zap.Error(err))
+			log.Error("create topic failed", zap.Error(err))
 			return
 		}
 	}

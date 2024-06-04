@@ -134,6 +134,9 @@ func newClient(nameServer, app string, ttl ...time.Duration) (c *client, err err
 		Tag:   app,
 		Keys:  []string{strconv.FormatInt(time.Now().Unix(), 10)},
 	})
+	if err != nil {
+		log.Error("send ping msg to mq failed", zap.Error(err))
+	}
 	return
 }
 

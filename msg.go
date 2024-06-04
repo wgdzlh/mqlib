@@ -7,6 +7,10 @@ import (
 	json "github.com/json-iterator/go"
 )
 
+var (
+	emptyBody = []byte("-")
+)
+
 type Message struct {
 	Id        string                `json:"id,omitempty"`         // 消息ID
 	RemoteApp string                `json:"remote_app,omitempty"` // RPC调用服务端应用名称
@@ -23,6 +27,9 @@ func (m *Message) ToString() string {
 }
 
 func (m *Message) ToRkMessage() *primitive.Message {
+	if len(m.Body) == 0 {
+		m.Body = emptyBody
+	}
 	return primitive.NewMessage(m.Topic, m.Body).WithTag(m.Tag).WithKeys(m.Keys)
 }
 
