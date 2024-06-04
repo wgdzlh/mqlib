@@ -21,6 +21,9 @@ func CreateTopic(nsName string, topics ...string) (err error) {
 		brokerAddr = realBrokerAddr
 	}
 	log.Info("creating topics if not exist", zap.String("brokerAddr", brokerAddr), zap.Any("topics", topics))
+	if len(topics) == 0 {
+		return
+	}
 	mqAdmin, err := admin.NewAdmin(
 		admin.WithResolver(primitive.NewPassthroughResolver([]string{nsName})),
 	)
