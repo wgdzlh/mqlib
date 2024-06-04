@@ -3,8 +3,8 @@ package mqlib
 import (
 	"strings"
 
-	"github.com/apache/rocketmq-client-go/v2/primitive"
 	json "github.com/json-iterator/go"
+	"github.com/wgdzlh/mqlib/rk/primitive"
 )
 
 var (

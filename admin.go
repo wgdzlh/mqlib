@@ -6,8 +6,8 @@ import (
 
 	"github.com/wgdzlh/mqlib/log"
 
-	"github.com/apache/rocketmq-client-go/v2/admin"
-	"github.com/apache/rocketmq-client-go/v2/primitive"
+	"github.com/wgdzlh/mqlib/rk/admin"
+	"github.com/wgdzlh/mqlib/rk/primitive"
 	"go.uber.org/zap"
 )
 

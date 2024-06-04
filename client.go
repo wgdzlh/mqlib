@@ -10,9 +10,9 @@ import (
 
 	"github.com/wgdzlh/mqlib/log"
 
-	"github.com/apache/rocketmq-client-go/v2/consumer"
-	"github.com/apache/rocketmq-client-go/v2/primitive"
-	"github.com/apache/rocketmq-client-go/v2/rlog"
+	"github.com/wgdzlh/mqlib/rk/consumer"
+	"github.com/wgdzlh/mqlib/rk/primitive"
+	"github.com/wgdzlh/mqlib/rk/rlog"
 	"go.uber.org/zap"
 )
 
@@ -50,7 +50,7 @@ func init() { // 设置rocketMQ客户端日志路径在本可执行文件同目�
 		panic(err)
 	}
 	rkLogPath := filepath.Join(filepath.Dir(ex), "rocketmq.log")
-	rlog.SetLogLevel("info")
+	rlog.SetLogLevel("warn")
 	rlog.SetOutputPath(rkLogPath)
 	log.Info("rocketmq log path", zap.String("rkLog", rkLogPath))
 }
