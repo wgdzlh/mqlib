@@ -10,4 +10,4 @@ require (
 	go.uber.org/zap v1.23.0
 )
 
-replace github.com/apache/rocketmq-client-go/v2 v2.1.2 => github.com/wgdzlh/rocketmq-client-go/v2 v2.1.2-f2
+replace github.com/apache/rocketmq-client-go/v2 v2.1.2 => github.com/wgdzlh/rocketmq-client-go/v2 v2.1.2-f3
