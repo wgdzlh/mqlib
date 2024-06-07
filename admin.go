@@ -40,7 +40,8 @@ func CreateTopic(nsName string, topics ...string) (err error) {
 			admin.WithWriteQueueNums(4),
 			admin.WithBrokerAddrCreate(brokerAddr),
 		); err != nil {
-			log.Error("create topic failed", zap.Error(err))
+			log.Warn("auto create topic failed, ignore this or change broker addr with env MQLIB_BROKER_ADDR",
+				zap.String("topic", topic), zap.Error(err))
 			return
 		}
 	}
