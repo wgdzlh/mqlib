@@ -3,8 +3,6 @@ package mqlib
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -44,15 +42,9 @@ type client struct {
 	rpcTTL     time.Duration // 客户端发出的RPC请求的timeout
 }
 
-func init() { // 设置rocketMQ客户端日志路径在本可执行文件同目录下
-	ex, err := os.Executable()
-	if err != nil {
-		panic(err)
-	}
-	rkLogPath := filepath.Join(filepath.Dir(ex), "rocketmq.log")
-	rlog.SetLogLevel("warn")
-	rlog.SetOutputPath(rkLogPath)
-	log.Info("rocketmq log path", zap.String("rkLog", rkLogPath))
+func init() {
+	logger, _ := log.LoggerInit("info")
+	rlog.SetLogger(logger)
 }
 
 // 只接收RPC调用的MQ客户端
