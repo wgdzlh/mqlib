@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	DEFAULT_RETRY = 3
-	tagSep        = "||"
+	DEFAULT_RETRY         = 3
+	DEFAULT_MAX_RECONSUME = 2
+	tagSep                = "||"
 
 	MSG_IDS_CACHE_EX = time.Hour * 2
 )
@@ -100,6 +101,7 @@ func NewConsumer(gpName, nsName string, broadcast bool, topics ...Topic) (c *Con
 		consumer.WithConsumeFromWhere(consumer.ConsumeFromLastOffset),
 		// consumer.WithPostSubscriptionWhenPull(!broadcast), 暂时不开启修改订阅的功能
 		consumer.WithRetry(DEFAULT_RETRY),
+		consumer.WithMaxReconsumeTimes(DEFAULT_MAX_RECONSUME),
 	); err != nil {
 		log.Error("init rocketmq consumer failed", zap.Error(err))
 		return
