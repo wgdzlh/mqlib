@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/wgdzlh/mqlib/log"
@@ -126,17 +125,17 @@ func newClient(nameServer, app string, ttl ...time.Duration) (c *client, err err
 		c.rpcTTL = DefaultRpcTTL
 	}
 	c.pub, err = NewProducer(app+pubGpSuffix, nameServer)
-	if err != nil {
-		return
-	}
-	err = c.SendMessage(&Message{
-		Topic: pingTopic,
-		Tag:   app,
-		Keys:  []string{strconv.FormatInt(time.Now().Unix(), 10)},
-	})
-	if err != nil {
-		log.Error("send ping msg to mq failed", zap.Error(err))
-	}
+	// if err != nil {
+	// 	return
+	// }
+	// err = c.SendMessage(&Message{
+	// 	Topic: pingTopic,
+	// 	Tag:   app,
+	// 	Keys:  []string{strconv.FormatInt(time.Now().Unix(), 10)},
+	// })
+	// if err != nil {
+	// 	log.Error("send ping msg to mq failed", zap.Error(err))
+	// }
 	return
 }
 
