@@ -108,7 +108,7 @@ func NewConsumer(gpName, nsName string, broadcast bool, topics ...Topic) (c *Con
 	for i := range topics {
 		topicNames[i] = topics[i].Name
 	}
-	CreateTopic(nsName, topicNames...)
+	CreateTopics(nsName, topicNames)
 	if err = c.subscribe(topics); err != nil {
 		log.Error("subscribe failed", zap.Error(err))
 		return
