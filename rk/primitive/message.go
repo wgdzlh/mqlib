@@ -23,6 +23,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -204,8 +205,32 @@ func (m *Message) GetShardingKey() string {
 }
 
 func (m *Message) String() string {
-	return fmt.Sprintf("[topic=%s, body=%s, Flag=%d, properties=%v, TransactionId=%s]",
-		m.Topic, string(m.Body), m.Flag, m.properties, m.TransactionId)
+	properties := "{}"
+	m.mutex.RLock()
+	if len(m.properties) > 0 {
+		keys := make([]string, 0, len(m.properties))
+		for k := range m.properties {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		var sb strings.Builder
+		sb.WriteString("{")
+		for i, k := range keys {
+			if i > 0 {
+				sb.WriteString(", ")
+			}
+			sb.WriteString(k)
+			sb.WriteString(": ")
+			sb.WriteString(m.properties[k])
+		}
+		sb.WriteString("}")
+		properties = sb.String()
+	}
+	m.mutex.RUnlock()
+
+	return fmt.Sprintf("[topic=%s, body=%s, Flag=%d, properties=%s, TransactionId=%s]",
+		m.Topic, string(m.Body), m.Flag, properties, m.TransactionId)
 }
 
 func (m *Message) Marshal() []byte {

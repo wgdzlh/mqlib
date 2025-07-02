@@ -2,7 +2,6 @@ package mqlib
 
 import (
 	"context"
-	"os"
 
 	"github.com/wgdzlh/mqlib/log"
 
@@ -11,14 +10,13 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	BROKER_ADDR_ENV = "MQLIB_BROKER_ADDR"
+var (
+	brokerAddr = "broker-a.rocketmq.svc.cluster.local:10911"
 )
 
-func CreateTopic(nsName string, topics ...string) (err error) {
-	brokerAddr := "broker-a.rocketmq.svc.cluster.local:10911"
-	if realBrokerAddr := os.Getenv(BROKER_ADDR_ENV); realBrokerAddr != "" {
-		brokerAddr = realBrokerAddr
+func CreateTopics(nsName string, topics []string, brokerAddrCfg ...string) (err error) {
+	if len(brokerAddrCfg) > 0 && brokerAddrCfg[0] != "" {
+		brokerAddr = brokerAddrCfg[0]
 	}
 	log.Info("creating topics if not exist", zap.String("brokerAddr", brokerAddr), zap.Any("topics", topics))
 	if len(topics) == 0 {
@@ -40,7 +38,7 @@ func CreateTopic(nsName string, topics ...string) (err error) {
 			admin.WithWriteQueueNums(4),
 			admin.WithBrokerAddrCreate(brokerAddr),
 		); err != nil {
-			log.Warn("auto create topic failed, ignore this or change broker addr with env MQLIB_BROKER_ADDR",
+			log.Warn("auto create topic failed, ignore this or set brokerAddrCfg",
 				zap.String("topic", topic), zap.Error(err))
 			return
 		}

@@ -343,5 +343,5 @@ func TestTagSub(t *testing.T) {
 }
 
 func TestCreateTopic(t *testing.T) {
-	t.Log(CreateTopic(nameServer, "test_topic"))
+	t.Log(CreateTopics(nameServer, []string{"test_topic"}))
 }
